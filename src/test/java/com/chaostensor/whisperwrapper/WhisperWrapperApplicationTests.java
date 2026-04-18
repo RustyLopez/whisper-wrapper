@@ -1,10 +1,10 @@
-package com.chaostensor.video_notes_to_wiki;
+package com.chaostensor.whisperwrapper;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class VideoNotesToWikiApplicationTests {
+class WhisperWrapperApplicationTests {
 
 	@Test
 	void contextLoads() {
