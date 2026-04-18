@@ -64,3 +64,6 @@ build/
 *.gif
 *.bmp
 *.tiff
+
+
+input-media/*

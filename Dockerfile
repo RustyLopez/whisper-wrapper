@@ -6,6 +6,10 @@ RUN apk add --no-cache python3=~3.11 py3-pip
 
 pip install whisperx
 
+pip install pipx
+
+pipx install insanely-fast-whisper
+
 WORKDIR /app
 
 COPY . .
