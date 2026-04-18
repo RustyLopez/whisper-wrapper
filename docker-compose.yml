@@ -12,7 +12,8 @@ services:
 #      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/videonotes
 #      SPRING_DATASOURCE_USERNAME: user
 #      SPRING_DATASOURCE_PASSWORD: password
-
+    volumes: # TODO make the local dir configurable
+      - ./media-input:./media-input
 
 #volumes:
 #  postgres_data:
