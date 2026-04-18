@@ -4,7 +4,7 @@ services:
 
   spring-boot-app:
     build: .
-    ports: # TODO allocate a different port here , need to remember which is external
+    ports: # TODO allocate a different port here , need to remember which is external. Note should only be accessible inside the cluster.
       - "8080:8080"
 #    depends_on:
 #      - postgres
