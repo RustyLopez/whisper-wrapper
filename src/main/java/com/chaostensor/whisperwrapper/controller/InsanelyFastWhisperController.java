@@ -4,6 +4,9 @@ package com.chaostensor.whisperwrapper.controller;
 import com.chaostensor.whisperwrapper.dto.WhisperRequest;
 import com.chaostensor.whisperwrapper.dto.WhisperResponse;
 import com.chaostensor.whisperwrapper.dto.WhisperUploadRequest;
+import com.chaostensor.whisperwrapper.dto.WhisperStatus;
+import com.chaostensor.whisperwrapper.dto.CompletedStatus;
+import com.chaostensor.whisperwrapper.dto.WhisperCollectionResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -157,6 +160,43 @@ public class InsanelyFastWhisperController {
                                 .jobId(jobId.toString()).build()
                 )
         );
+    }
+
+    @GetMapping("/{jobId}")
+    public ResponseEntity<WhisperResponse> getJob(@PathVariable String jobId) {
+        Path transcriptDir = Paths.get(transcriptOutputBasePath).resolve(jobId);
+        if (Files.exists(transcriptDir) && Files.isDirectory(transcriptDir)) {
+            try {
+                // Assume transcript is in transcript.txt
+                Path transcriptFile = transcriptDir.resolve("transcript.txt");
+                if (Files.exists(transcriptFile)) {
+                    String transcript = Files.readString(transcriptFile);
+                    WhisperStatus status = new CompletedStatus("completed", transcript);
+                    WhisperResponse response = WhisperResponse.builder()
+                        .jobId(jobId)
+                        .status(status)
+                        .build();
+                    return ResponseEntity.ok(response);
+                }
+            } catch (IOException e) {
+                return ResponseEntity.internalServerError().build();
+            }
+        }
+        return ResponseEntity.notFound().build();
+    }
+
+    @GetMapping("/jobs")
+    public ResponseEntity<WhisperCollectionResponse> listJobs() {
+        try {
+            List<String> jobIds = Files.list(Paths.get(transcriptOutputBasePath))
+                .filter(Files::isDirectory)
+                .map(p -> p.getFileName().toString())
+                .collect(Collectors.toList());
+            WhisperCollectionResponse response = new WhisperCollectionResponse(jobIds);
+            return ResponseEntity.ok(response);
+        } catch (IOException e) {
+            return ResponseEntity.internalServerError().build();
+        }
     }
 
     private static String bytesToHex(byte[] bytes) {
