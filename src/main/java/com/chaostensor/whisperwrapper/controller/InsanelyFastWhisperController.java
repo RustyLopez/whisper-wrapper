@@ -41,6 +41,12 @@ public class InsanelyFastWhisperController {
     @Value("${com.chaostensor.whisperwrapper.media-base-path}")
     String mediaBasePath;
 
+    /**
+     * Base path for transcript output files.
+     */
+    @Value("${com.chaostensor.whisperwrapper.transcript-output}")
+    String transcriptOutputBasePath;
+
 
     public InsanelyFastWhisperController() {
 
@@ -59,7 +65,7 @@ public class InsanelyFastWhisperController {
         final UUID jobId = UUID.randomUUID();
 
 
-        kickOffWhisperJob(request);
+        kickOffWhisperJob(request, jobId);
 
         /**
          * TODO should have more reason for this mono later when going tot he db to register the job..etc
@@ -74,14 +80,14 @@ public class InsanelyFastWhisperController {
     }
 
 
-    /**
-     * TODO Needs to save the output in a db with the job id
-     *   a lot of what initially went into the other service actually needs to go here.
-     *   The other service will just be handing requests off between the different models
-     *   but we need these different steps to be hosted by different services so that
-     *   they can be scaled independently
-     */
-     private void kickOffWhisperJob(final WhisperRequest request) {
+     /**
+      * TODO Needs to save the output in a db with the job id
+      *   a lot of what initially went into the other service actually needs to go here.
+      *   The other service will just be handing requests off between the different models
+      *   but we need these different steps to be hosted by different services so that
+      *   they can be scaled independently
+      */
+      private void kickOffWhisperJob(final WhisperRequest request, final UUID jobId) {
          final Process process;
          try {
              List<String> command = new ArrayList<>();
@@ -98,12 +104,10 @@ public class InsanelyFastWhisperController {
              //    command.add(request.getDeviceId());
              //}
 
-             // not something that should be configurable by the external client as they do not access the results
-             // by path and we don't want them able to force our app to write to an arbitrary directory.
-             //if (request.getTranscriptPath() != null && !request.getTranscriptPath().isEmpty()) {
-             //    command.add("--transcript-path");
-             //    command.add(request.getTranscriptPath());
-             //}
+              // Generate UUID-based transcript path relative to the configured base path
+              String transcriptPath = Paths.get(transcriptOutputBasePath).resolve(jobId.toString()).toString();
+              command.add("--transcript-path");
+              command.add(transcriptPath);
 
              // External process should not be able to give us their hf tokens or
              // trigger download of a model we don't already support.
