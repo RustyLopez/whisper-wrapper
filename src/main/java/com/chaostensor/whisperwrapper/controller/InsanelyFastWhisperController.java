@@ -3,15 +3,20 @@ package com.chaostensor.whisperwrapper.controller;
 
 import com.chaostensor.whisperwrapper.dto.WhisperRequest;
 import com.chaostensor.whisperwrapper.dto.WhisperResponse;
+import com.chaostensor.whisperwrapper.dto.WhisperUploadRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Mono;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -77,6 +82,60 @@ public class InsanelyFastWhisperController {
                 )
         );
 
+    }
+
+    /**
+     * Alternative version of createJob that accepts a video file upload.
+     * Saves the uploaded file to mediaBasePath and kicks off the whisper job.
+     */
+    @PostMapping("/upload")
+    public Mono<ResponseEntity<WhisperResponse>> createJobFromUpload(@ModelAttribute WhisperUploadRequest uploadRequest) {
+
+        final UUID jobId = UUID.randomUUID();
+
+        try {
+            // Save the uploaded file to mediaBasePath
+            String originalFilename = uploadRequest.getFile().getOriginalFilename();
+            if (originalFilename == null || originalFilename.isEmpty()) {
+                originalFilename = "uploaded_video.mp4"; // default name if none provided
+            }
+            // Generate a unique filename to avoid conflicts
+            String uniqueFilename = jobId.toString() + "_" + originalFilename;
+            Path targetPath = Paths.get(mediaBasePath).resolve(uniqueFilename).normalize();
+
+            // Ensure the directory exists
+            Files.createDirectories(targetPath.getParent());
+
+            // Copy the file
+            Files.copy(uploadRequest.getFile().getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+
+            // Create WhisperRequest with the saved file path (relative to mediaBasePath)
+            WhisperRequest request = WhisperRequest.builder()
+                    .fileName(uniqueFilename)
+                    .task(uploadRequest.getTask())
+                    .language(uploadRequest.getLanguage())
+                    .timestamp(uploadRequest.getTimestamp())
+                    .numSpeakers(uploadRequest.getNumSpeakers())
+                    .minSpeakers(uploadRequest.getMinSpeakers())
+                    .maxSpeakers(uploadRequest.getMaxSpeakers())
+                    .build();
+
+            // Kick off the whisper job
+            kickOffWhisperJob(request, jobId);
+
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to save uploaded file", e);
+        }
+
+        /**
+         * Return the job id immediately, even before processing is complete
+         */
+        return Mono.just(
+                ResponseEntity.ok(
+                        WhisperResponse.builder()
+                                .jobId(jobId.toString()).build()
+                )
+        );
     }
 
 

@@ -77,7 +77,7 @@ public class WhisperXController {
         try {
             process = Runtime.getRuntime()
                     .exec(new String[]{"insanely-fast-whisper",
-                                    Paths.get(mediaBasePath).resolve(request.getPathRelativeSharedVolumeMount()).normalize().toString()}
+                                    Paths.get(mediaBasePath).resolve(request.getFileName()).normalize().toString()}
                             // TODO other options
                     );
         } catch (IOException e) {
