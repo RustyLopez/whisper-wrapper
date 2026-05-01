@@ -6,7 +6,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.context.AbstractSecurityWebApplicationInitializer;
+import org.springframework.security.web.server.SecurityWebFilterChain;
 
 /**
  * NOTE: Security: Caution: For now hosting only as an internal docker service used by a separate app in the same docker env.
@@ -18,10 +21,18 @@ import org.springframework.security.web.SecurityFilterChain;
 @Profile("internal-only")
 @Slf4j
 public class DevOrInternOnlySecurityConfig {
+
+
+    /**
+     * NOTe this ist he web flux way...
+     * @param http
+     * @return
+     * @throws Exception
+     */
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityWebFilterChain filterChain(ServerHttpSecurity http) throws Exception {
         log.warn("This configuration is only intended for dev or localhost envs. Please setup auth if using in production.");
-        http.authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+        http.authorizeExchange(auth -> auth.anyExchange().permitAll());
         return http.build();
     }
 }
