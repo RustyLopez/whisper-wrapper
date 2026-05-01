@@ -1,4 +1,4 @@
-package com.chaostensor.video_notes_to_wiki.config;
+package com.chaostensor.whisperwrapper.config;
 
 
 import lombok.extern.slf4j.Slf4j;
