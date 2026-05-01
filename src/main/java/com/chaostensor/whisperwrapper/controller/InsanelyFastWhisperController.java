@@ -87,20 +87,32 @@ public class InsanelyFastWhisperController {
              List<String> command = new ArrayList<>();
              command.add("insanely-fast-whisper");
              command.add("--file-name");
-             command.add(Paths.get(mediaBasePath).resolve(request.getPathRelativeSharedVolumeMount()).normalize().toString());
+               // TODO ensure this can't result in directory traversal.
+               // TODO ensure user has access rights to read and transcribe the video. Future task for if we ever make
+               //  this wrapper more standalone
+             command.add(Paths.get(mediaBasePath).resolve(request.getFileName()).normalize().toString());
 
-             if (request.getDeviceId() != null && !request.getDeviceId().isEmpty()) {
-                 command.add("--device-id");
-                 command.add(request.getDeviceId());
-             }
-             if (request.getTranscriptPath() != null && !request.getTranscriptPath().isEmpty()) {
-                 command.add("--transcript-path");
-                 command.add(request.getTranscriptPath());
-             }
-             if (request.getModelName() != null && !request.getModelName().isEmpty()) {
-                 command.add("--model-name");
-                 command.add(request.getModelName());
-             }
+             // TODO Not likely needed for our use case or something the client would know, or that we would want them to know
+             //if (request.getDeviceId() != null && !request.getDeviceId().isEmpty()) {
+             //    command.add("--device-id");
+             //    command.add(request.getDeviceId());
+             //}
+
+             // not something that should be configurable by the external client as they do not access the results
+             // by path and we don't want them able to force our app to write to an arbitrary directory.
+             //if (request.getTranscriptPath() != null && !request.getTranscriptPath().isEmpty()) {
+             //    command.add("--transcript-path");
+             //    command.add(request.getTranscriptPath());
+             //}
+
+             // External process should not be able to give us their hf tokens or
+             // trigger download of a model we don't already support.
+             // TODO see if we can support model selection while still banning
+             // automatic download if the model is not already available.
+             // if (request.getModelName() != null && !request.getModelName().isEmpty()) {
+             //     command.add("--model-name");
+             //     command.add(request.getModelName());
+             // }
              if (request.getTask() != null && !request.getTask().isEmpty()) {
                  command.add("--task");
                  command.add(request.getTask());
@@ -109,26 +121,34 @@ public class InsanelyFastWhisperController {
                  command.add("--language");
                  command.add(request.getLanguage());
              }
-             if (request.getBatchSize() != null) {
-                 command.add("--batch-size");
-                 command.add(request.getBatchSize().toString());
-             }
-             if (request.getFlash() != null && request.getFlash()) {
-                 command.add("--flash");
-                 command.add("True");
-             }
+             // this is something we need to have control over
+             //if (request.getBatchSize() != null) {
+             //    command.add("--batch-size");
+             //    command.add(request.getBatchSize().toString());
+             //}
+             // TODO: Not currently installed int he env
+             //if (request.getFlash() != null && request.getFlash()) {
+             //    command.add("--flash");
+             //   command.add("True");
+             //}
              if (request.getTimestamp() != null && !request.getTimestamp().isEmpty()) {
                  command.add("--timestamp");
                  command.add(request.getTimestamp());
              }
-             if (request.getHfToken() != null && !request.getHfToken().isEmpty()) {
-                 command.add("--hf-token");
-                 command.add(request.getHfToken());
-             }
-             if (request.getDiarizationModel() != null && !request.getDiarizationModel().isEmpty()) {
-                 command.add("--diarization_model");
-                 command.add(request.getDiarizationModel());
-             }
+             // External process should not be able to give us their hf tokens or
+             // trigger download of a model we don't already support.
+             //if (request.getHfToken() != null && !request.getHfToken().isEmpty()) {
+             //    command.add("--hf-token");
+             //    command.add(request.getHfToken());
+             //}
+             // External process should not be able to give us their hf tokens or
+             // trigger download of a model we don't already support.
+             // TODO see if we can support model selection while still banning
+             // automatic download if the model is not already available.
+             //if (request.getDiarizationModel() != null && !request.getDiarizationModel().isEmpty()) {
+             //    command.add("--diarization_model");
+             //    command.add(request.getDiarizationModel());
+             //}
              if (request.getNumSpeakers() != null) {
                  command.add("--num-speakers");
                  command.add(request.getNumSpeakers().toString());
