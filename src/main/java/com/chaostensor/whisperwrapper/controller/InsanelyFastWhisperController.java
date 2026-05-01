@@ -168,6 +168,15 @@ public class InsanelyFastWhisperController {
         if (Files.exists(transcriptDir) && Files.isDirectory(transcriptDir)) {
             try {
                 // Assume transcript is in transcript.txt
+                   // TODO ON RETURN we need the hash id to efficiently find the file
+                   // until we add the database
+                   // and the non uploading pathway does not produce a hash.
+                   //  and even if it did, we'd have to re-work it to change the file name of the file that was already in the input dir
+                   // which is not great.
+                   // we may just have to bite the bullet and wire in postgres. Take the hash OUT of the file name
+                   // and put it in postgres along with the job id and the file name path which may or may not be, the h
+                   // job id depending on how the file was sourced
+                   // for now i can just og to the output dir and see what's there.
                 Path transcriptFile = transcriptDir.resolve("transcript.txt");
                 if (Files.exists(transcriptFile)) {
                     String transcript = Files.readString(transcriptFile);
