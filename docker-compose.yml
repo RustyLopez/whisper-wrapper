@@ -4,10 +4,17 @@ services:
 
   postgres-w-vector:
     image: pgvector/pgvector:pg18-trixie # postgres PLUS vector db :)
+    healthcheck: # Pg vector does some restart cycling for some reason. So, we need to ensure it's ready.
+      # https://www.postgresql.org/docs/current/app-pg-isready.html
+      test: [ "CMD-SHELL", "pg_isready -U user" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: videonotes
+      POSTGRES_DB: video_notes
     ports:
       - "5432:5432"
     volumes:
