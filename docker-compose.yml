@@ -5,15 +5,15 @@ services:
   spring-boot-app:
     build: .
     ports: # TODO allocate a different port here , need to remember which is external. Note should only be accessible inside the cluster.
-      - "8080:8080"
+      - "8070:8080"
 #    depends_on:
 #      - postgres
-#    environment:
-#      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/videonotes
+    environment:
+      MEDIA_INPUT: /media-input # else for standalone spring bot it's just ./media-input relative to the local project, which btw tends to be sub repo embedded in the current configuration.
 #      SPRING_DATASOURCE_USERNAME: user
 #      SPRING_DATASOURCE_PASSWORD: password
     volumes: # TODO make the local dir configurable
-      - ./input-media:./input-media
+      - ../media-input:/media-input
 
 #volumes:
 #  postgres_data:

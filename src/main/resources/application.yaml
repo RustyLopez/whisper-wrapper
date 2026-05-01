@@ -5,4 +5,4 @@ spring:
 com:
   chaostensor:
     whisperwrapper:
-      media-base-path: ./input-media # TODO use an env var with a fallback to the process working dir / media
+      media-base-path: ${MEDIA_INPUT:./media-input} # TODO use an env var with a fallback to the process working dir / media

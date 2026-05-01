@@ -66,4 +66,4 @@ build/
 *.tiff
 
 
-input-media/*
+media-input
