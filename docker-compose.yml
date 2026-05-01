@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
 
-  postgres:
+  postgres-w-vector:
     image: pgvector/pgvector:pg18-trixie # postgres PLUS vector db :)
     environment:
       POSTGRES_USER: user
@@ -17,8 +17,8 @@ services:
     build: .
     ports:
       - "8070:8080"
-#    depends_on:
-#      - postgres
+    depends_on:
+      - postgres-w-vector
     environment:
       MEDIA_INPUT: /media-input
       TRANSCRIPT_OUTPUT: /transcript-output
