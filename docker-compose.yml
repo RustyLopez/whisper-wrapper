@@ -13,7 +13,7 @@ services:
 #      SPRING_DATASOURCE_USERNAME: user
 #      SPRING_DATASOURCE_PASSWORD: password
     volumes: # TODO make the local dir configurable
-      - ./media-input:./media-input
+      - ./input-media:./input-media
 
 #volumes:
 #  postgres_data:
