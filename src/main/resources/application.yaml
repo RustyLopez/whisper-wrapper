@@ -8,7 +8,5 @@ spring:
   application:
     name: video-notes-to-wiki
 
-com: # Todo move to "app"
-  chaostensor:
-    whisperwrapper:
-      media-base-path: ${MEDIA_INPUT:./media-input} # TODO use an env var with a fallback to the process working dir / media
+app:
+  media-input: ${MEDIA_INPUT:./media-input} # TODO use an env var with a fallback to the process working dir / media
