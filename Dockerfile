@@ -18,9 +18,8 @@ COPY . .
 # should already be built. Else this gets expensive.
 # RUN chmod +x mvnw && ./mvnw clean package -DskipTests
 
-RUN chmod +x target/*.jar
-
-
 EXPOSE 8080
 
-CMD ["java", "-jar", "target/*.jar"]
+#CMD ["ls", "-la", "target"]
+ # TODO why am I having to put full name in here?
+ENTRYPOINT ["java", "-jar", "target/video-notes-to-wiki-0.0.1-SNAPSHOT.jar"]
