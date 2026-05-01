@@ -6,15 +6,15 @@ services:
     image: pgvector/pgvector:pg18-trixie # postgres PLUS vector db :)
     healthcheck: # Pg vector does some restart cycling for some reason. So, we need to ensure it's ready.
       # https://www.postgresql.org/docs/current/app-pg-isready.html
-      test: [ "CMD-SHELL", "pg_isready -U user" ]
+      test: [ "CMD-SHELL", "pg_isready -d \"video_notes\" -U \"user\"" ]
       interval: 5s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 15s
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: video_notes
+      SPRING_VECTOR_DB_POSTGRES_DATASOURCE_URL: jdbc:postgresql://postgres-w-vector:5432/video_notes
+      SPRING_VECTOR_DB_POSTGRES_DATASOURCE_USERNAME: user
+      SPRING_VECTOR_DB_POSTGRES_DATASOURCE_PASSWORD: password
     ports:
       - "5432:5432"
     volumes:
@@ -25,7 +25,8 @@ services:
     ports:
       - "8070:8080"
     depends_on:
-      - postgres-w-vector
+      postgres-w-vector:
+        condition: service_healthy
     environment:
       MEDIA_INPUT: /media-input
       TRANSCRIPT_OUTPUT: /transcript-output

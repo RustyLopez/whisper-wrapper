@@ -6,7 +6,20 @@ spring:
     # not an issue for now but we'll probably want to add some server to server auth solution when we push this into eks.
     active: internal-only
   application:
-    name: video-notes-to-wiki
+    name: whisper-wrapper
+  datasource:
+    # for this app we only need the non reactive for liquibase.
+    url: ${SPRING_VECTOR_DB_POSTGRES_DATASOURCE_URL:jdbc:postgresql://localhost:5432/video_notes}
+    username: ${SPRING_VECTOR_DB_POSTGRES_DATASOURCE_USERNAME:user}
+    password: ${SPRING_VECTOR_DB_POSTGRES_DATASOURCE_PASSWORD:password}
+    driver-class-name: org.postgresql.Driver
+  r2dbc:
+    url: ${SPRING_R2DBC_DATASOURCE_URL:r2dbc:postgresql://localhost:5432/video_notes}
+    username: ${SPRING_R2DBC_DATASOURCE_USERNAME:user}
+    password: ${SPRING_R2DBC_DATASOURCE_PASSWORD:password}
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.xml
+    default-schema: public
   servlet:
     multipart:
       max-file-size: ${MAX_FILE_SIZE:1GB}
