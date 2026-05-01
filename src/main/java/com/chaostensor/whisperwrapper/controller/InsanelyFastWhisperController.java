@@ -12,6 +12,8 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -79,17 +81,71 @@ public class InsanelyFastWhisperController {
      *   but we need these different steps to be hosted by different services so that
      *   they can be scaled independently
      */
-    private void kickOffWhisperJob(final WhisperRequest request) {
-        final Process process;
-        try {
-            process = Runtime.getRuntime()
-                    .exec(new String[]{"insanely-fast-whisper",
-                                    Paths.get(mediaBasePath).resolve(request.getPathRelativeSharedVolumeMount()).normalize().toString()}
-                            // TODO other options
-                    );
-        } catch (IOException e) {
-            throw new RuntimeException("failed to initialize the process", e);
-        }
+     private void kickOffWhisperJob(final WhisperRequest request) {
+         final Process process;
+         try {
+             List<String> command = new ArrayList<>();
+             command.add("insanely-fast-whisper");
+             command.add("--file-name");
+             command.add(Paths.get(mediaBasePath).resolve(request.getPathRelativeSharedVolumeMount()).normalize().toString());
+
+             if (request.getDeviceId() != null && !request.getDeviceId().isEmpty()) {
+                 command.add("--device-id");
+                 command.add(request.getDeviceId());
+             }
+             if (request.getTranscriptPath() != null && !request.getTranscriptPath().isEmpty()) {
+                 command.add("--transcript-path");
+                 command.add(request.getTranscriptPath());
+             }
+             if (request.getModelName() != null && !request.getModelName().isEmpty()) {
+                 command.add("--model-name");
+                 command.add(request.getModelName());
+             }
+             if (request.getTask() != null && !request.getTask().isEmpty()) {
+                 command.add("--task");
+                 command.add(request.getTask());
+             }
+             if (request.getLanguage() != null && !request.getLanguage().isEmpty()) {
+                 command.add("--language");
+                 command.add(request.getLanguage());
+             }
+             if (request.getBatchSize() != null) {
+                 command.add("--batch-size");
+                 command.add(request.getBatchSize().toString());
+             }
+             if (request.getFlash() != null && request.getFlash()) {
+                 command.add("--flash");
+                 command.add("True");
+             }
+             if (request.getTimestamp() != null && !request.getTimestamp().isEmpty()) {
+                 command.add("--timestamp");
+                 command.add(request.getTimestamp());
+             }
+             if (request.getHfToken() != null && !request.getHfToken().isEmpty()) {
+                 command.add("--hf-token");
+                 command.add(request.getHfToken());
+             }
+             if (request.getDiarizationModel() != null && !request.getDiarizationModel().isEmpty()) {
+                 command.add("--diarization_model");
+                 command.add(request.getDiarizationModel());
+             }
+             if (request.getNumSpeakers() != null) {
+                 command.add("--num-speakers");
+                 command.add(request.getNumSpeakers().toString());
+             }
+             if (request.getMinSpeakers() != null) {
+                 command.add("--min-speakers");
+                 command.add(request.getMinSpeakers().toString());
+             }
+             if (request.getMaxSpeakers() != null) {
+                 command.add("--max-speakers");
+                 command.add(request.getMaxSpeakers().toString());
+             }
+
+             process = Runtime.getRuntime().exec(command.toArray(new String[0]));
+         } catch (IOException e) {
+             throw new RuntimeException("failed to initialize the process", e);
+         }
 
         final BufferedReader solveOutput = new BufferedReader(new InputStreamReader(process.getInputStream()));
         final BufferedReader solveErrors = new BufferedReader(new InputStreamReader(process.getErrorStream()));
