@@ -22,4 +22,5 @@ EXPOSE 8080
 
 #CMD ["ls", "-la", "target"]
  # TODO why am I having to put full name in here?
-ENTRYPOINT ["java", "-jar", "target/video-notes-to-wiki-0.0.1-SNAPSHOT.jar"]
+  TODO put th jar name here.
+ENTRYPOINT ["java", "-jar", "target/?-0.0.1-SNAPSHOT.jar"]
