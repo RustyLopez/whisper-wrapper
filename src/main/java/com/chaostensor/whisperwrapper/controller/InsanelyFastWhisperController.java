@@ -17,6 +17,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -87,6 +89,7 @@ public class InsanelyFastWhisperController {
     /**
      * Alternative version of createJob that accepts a video file upload.
      * Saves the uploaded file to mediaBasePath and kicks off the whisper job.
+     * Uses hash of file content + UUID as filename, checks for duplicates.
      */
     @PostMapping("/upload")
     public Mono<ResponseEntity<WhisperResponse>> createJobFromUpload(@ModelAttribute WhisperUploadRequest uploadRequest) {
@@ -94,20 +97,29 @@ public class InsanelyFastWhisperController {
         final UUID jobId = UUID.randomUUID();
 
         try {
-            // Save the uploaded file to mediaBasePath
-            String originalFilename = uploadRequest.getFile().getOriginalFilename();
-            if (originalFilename == null || originalFilename.isEmpty()) {
-                originalFilename = "uploaded_video.mp4"; // default name if none provided
-            }
-            // Generate a unique filename to avoid conflicts
-            String uniqueFilename = jobId.toString() + "_" + originalFilename;
-            Path targetPath = Paths.get(mediaBasePath).resolve(uniqueFilename).normalize();
+            MultipartFile file = uploadRequest.getFile();
 
-            // Ensure the directory exists
-            Files.createDirectories(targetPath.getParent());
+            // Compute SHA-256 hash of the file
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashBytes = digest.digest(file.getInputStream().readAllBytes());
+            String hash = bytesToHex(hashBytes);
+
+            // Left edge match scan: check if any files in mediaBasePath start with this hash
+            Path mediaPath = Paths.get(mediaBasePath);
+            Files.createDirectories(mediaPath); // ensure directory exists
+            boolean isDuplicate = Files.list(mediaPath)
+                    .anyMatch(path -> path.getFileName().toString().startsWith(hash));
+
+            if (isDuplicate) {
+                return Mono.just(ResponseEntity.badRequest().build());
+            }
+
+            // Generate filename: hash + UUID (ignore provided name)
+            String uniqueFilename = hash + "_" + jobId.toString();
+            Path targetPath = mediaPath.resolve(uniqueFilename);
 
             // Copy the file
-            Files.copy(uploadRequest.getFile().getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+            Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
 
             // Create WhisperRequest with the saved file path (relative to mediaBasePath)
             WhisperRequest request = WhisperRequest.builder()
@@ -123,8 +135,8 @@ public class InsanelyFastWhisperController {
             // Kick off the whisper job
             kickOffWhisperJob(request, jobId);
 
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to save uploaded file", e);
+        } catch (IOException | NoSuchAlgorithmException e) {
+            throw new RuntimeException("Failed to process uploaded file", e);
         }
 
         /**
@@ -136,6 +148,14 @@ public class InsanelyFastWhisperController {
                                 .jobId(jobId.toString()).build()
                 )
         );
+    }
+
+    private static String bytesToHex(byte[] bytes) {
+        StringBuilder result = new StringBuilder();
+        for (byte b : bytes) {
+            result.append(String.format("%02x", b));
+        }
+        return result.toString();
     }
 
 
