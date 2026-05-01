@@ -38,13 +38,13 @@ public class InsanelyFastWhisperController {
      * Mount your docker external path here. Unless just running locally via spring boot. In which case configure this via env
      * var to be wherever your input files will be.
      */
-    @Value("${com.chaostensor.whisperwrapper.media-base-path}")
+    @Value("${app.media-base-path}")
     String mediaBasePath;
 
     /**
      * Base path for transcript output files.
      */
-    @Value("${com.chaostensor.whisperwrapper.transcript-output}")
+    @Value("${app.transcript-output}")
     String transcriptOutputBasePath;
 
 
