@@ -15,7 +15,11 @@ WORKDIR /app
 COPY . .
 
 
-RUN chmod +x mvnw && ./mvnw clean package -DskipTests
+# should already be built. Else this gets expensive.
+# RUN chmod +x mvnw && ./mvnw clean package -DskipTests
+
+RUN chmod +x target/*.jar
+
 
 EXPOSE 8080
 
