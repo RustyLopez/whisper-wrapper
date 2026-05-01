@@ -43,7 +43,7 @@ public class InsanelyFastWhisperController {
      * Mount your docker external path here. Unless just running locally via spring boot. In which case configure this via env
      * var to be wherever your input files will be.
      */
-    @Value("${app.media-base-path}")
+    @Value("${app.media-input}")
     String mediaBasePath;
 
     /**

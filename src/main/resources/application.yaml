@@ -13,6 +13,5 @@ spring:
       max-request-size: ${MAX_REQUEST_SIZE:100MB}
 
 app:
-  media-base-path: ${MEDIA_BASE_PATH:./media-input} # Base path for storing uploaded media files
   media-input: ${MEDIA_INPUT:./media-input} # TODO use an env var with a fallback to the process working dir / media
   transcript-output: ${TRANSCRIPT_OUTPUT:./transcript-output} # TODO use an env var with a fallback to the process working dir / media
