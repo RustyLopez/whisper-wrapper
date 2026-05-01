@@ -9,8 +9,8 @@ spring:
     name: video-notes-to-wiki
   servlet:
     multipart:
-      max-file-size: ${MAX_FILE_SIZE:100MB}
-      max-request-size: ${MAX_REQUEST_SIZE:100MB}
+      max-file-size: ${MAX_FILE_SIZE:1GB}
+      max-request-size: ${MAX_REQUEST_SIZE:1025MB}
 
 app:
   media-input: ${MEDIA_INPUT:./media-input} # TODO use an env var with a fallback to the process working dir / media

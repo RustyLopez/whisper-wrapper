@@ -99,16 +99,25 @@ public class InsanelyFastWhisperController {
         try {
             MultipartFile file = uploadRequest.getFile();
 
-            // Compute SHA-256 hash of the file
+            // Compute SHA-256 hash of the file using streaming
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hashBytes = digest.digest(file.getInputStream().readAllBytes());
+            try (var inputStream = file.getInputStream()) {
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    digest.update(buffer, 0, bytesRead);
+                }
+            }
+            byte[] hashBytes = digest.digest();
             String hash = bytesToHex(hashBytes);
 
             // Left edge match scan: check if any files in mediaBasePath start with this hash
             Path mediaPath = Paths.get(mediaBasePath);
             Files.createDirectories(mediaPath); // ensure directory exists
-            boolean isDuplicate = Files.list(mediaPath)
-                    .anyMatch(path -> path.getFileName().toString().startsWith(hash));
+            boolean isDuplicate;
+            try (var paths = Files.list(mediaPath)) {
+                isDuplicate = paths.anyMatch(path -> path.getFileName().toString().startsWith(hash));
+            }
 
             if (isDuplicate) {
                 return Mono.just(ResponseEntity.badRequest().build());
