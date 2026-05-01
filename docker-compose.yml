@@ -2,6 +2,17 @@ version: '3.8'
 
 services:
 
+  postgres:
+    image: pgvector/pgvector:pg18-trixie # postgres PLUS vector db :)
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: videonotes
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres-data:/var/lib/postgresql
+
   spring-boot-app:
     build: .
     ports:
