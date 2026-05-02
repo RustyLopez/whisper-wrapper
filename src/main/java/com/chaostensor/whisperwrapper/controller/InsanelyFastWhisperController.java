@@ -7,11 +7,15 @@ import com.chaostensor.whisperwrapper.dto.WhisperUploadRequest;
 import com.chaostensor.whisperwrapper.dto.WhisperStatus;
 import com.chaostensor.whisperwrapper.dto.CompletedStatus;
 import com.chaostensor.whisperwrapper.dto.WhisperCollectionResponse;
+import com.chaostensor.whisperwrapper.dto.PendingStatus;
+import com.chaostensor.whisperwrapper.entity.WhisperJob;
+import com.chaostensor.whisperwrapper.repository.WhisperJobRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -57,9 +61,17 @@ public class InsanelyFastWhisperController {
     @Value("${app.transcript-output}")
     String transcriptOutputBasePath;
 
+    /**
+     * Base path for completed video files.
+     */
+    @Value("${app.video-has-been-transcribed}")
+    String videoOutputBasePath;
 
-    public InsanelyFastWhisperController() {
+    private final WhisperJobRepository whisperJobRepository;
 
+
+    public InsanelyFastWhisperController(WhisperJobRepository whisperJobRepository) {
+        this.whisperJobRepository = whisperJobRepository;
     }
 
     /**
@@ -74,12 +86,33 @@ public class InsanelyFastWhisperController {
 
         final UUID jobId = UUID.randomUUID();
 
+        // Save job to DB
+        WhisperJob job = new WhisperJob(jobId, null, "pending", null, request.getFileName());
+        whisperJobRepository.save(job).block(); // sync save
 
-        kickOffWhisperJob(request, jobId);
+        // Kick off the whisper job asynchronously
+        Mono.fromRunnable(() -> {
+            try {
+                kickOffWhisperJob(request, jobId);
+                // On success, update DB and move file
+                String transcript = Files.readString(Paths.get(transcriptOutputBasePath).resolve(jobId.toString()).resolve("transcript.txt"));
+                job.setStatus("completed");
+                job.setTranscriptText(transcript);
+                whisperJobRepository.save(job).block();
 
-        /**
-         * TODO should have more reason for this mono later when going tot he db to register the job..etc
-         */
+                // Move video to output dir
+                Path source = Paths.get(mediaBasePath).resolve(request.getFileName());
+                Path dest = Paths.get(videoOutputBasePath).resolve(request.getFileName());
+                Files.createDirectories(dest.getParent());
+                Files.move(source, dest);
+
+            } catch (Exception e) {
+                // On failure, update status to failed
+                job.setStatus("failed");
+                whisperJobRepository.save(job).block();
+            }
+        }).subscribeOn(Schedulers.boundedElastic()).subscribe();
+
         return Mono.just(
                 ResponseEntity.ok(
                         WhisperResponse.builder()
@@ -126,12 +159,16 @@ public class InsanelyFastWhisperController {
                 return Mono.just(ResponseEntity.badRequest().build());
             }
 
-            // Generate filename: hash + UUID (ignore provided name)
-            String uniqueFilename = hash + "_" + jobId.toString();
+            // Generate filename: UUID only (ignore provided name)
+            String uniqueFilename = jobId.toString();
             Path targetPath = mediaPath.resolve(uniqueFilename);
 
             // Copy the file
             Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+
+            // Save job to DB
+            WhisperJob job = new WhisperJob(jobId, hash, "pending", null, uniqueFilename);
+            whisperJobRepository.save(job).block(); // sync save
 
             // Create WhisperRequest with the saved file path (relative to mediaBasePath)
             WhisperRequest request = WhisperRequest.builder()
@@ -144,8 +181,28 @@ public class InsanelyFastWhisperController {
                     .maxSpeakers(uploadRequest.getMaxSpeakers())
                     .build();
 
-            // Kick off the whisper job
-            kickOffWhisperJob(request, jobId);
+            // Kick off the whisper job asynchronously
+            Mono.fromRunnable(() -> {
+                try {
+                    kickOffWhisperJob(request, jobId);
+                    // On success, update DB and move file
+                    String transcript = Files.readString(Paths.get(transcriptOutputBasePath).resolve(jobId.toString()).resolve("transcript.txt"));
+                    job.setStatus("completed");
+                    job.setTranscriptText(transcript);
+                    whisperJobRepository.save(job).block();
+
+                    // Move video to output dir
+                    Path source = Paths.get(mediaBasePath).resolve(uniqueFilename);
+                    Path dest = Paths.get(videoOutputBasePath).resolve(uniqueFilename);
+                    Files.createDirectories(dest.getParent());
+                    Files.move(source, dest);
+
+                } catch (Exception e) {
+                    // On failure, update status to failed
+                    job.setStatus("failed");
+                    whisperJobRepository.save(job).block();
+                }
+            }).subscribeOn(Schedulers.boundedElastic()).subscribe();
 
         } catch (IOException | NoSuchAlgorithmException e) {
             throw new RuntimeException("Failed to process uploaded file", e);
@@ -164,46 +221,39 @@ public class InsanelyFastWhisperController {
 
     @GetMapping("/{jobId}")
     public ResponseEntity<WhisperResponse> getJob(@PathVariable String jobId) {
-        Path transcriptDir = Paths.get(transcriptOutputBasePath).resolve(jobId);
-        if (Files.exists(transcriptDir) && Files.isDirectory(transcriptDir)) {
-            try {
-                // Assume transcript is in transcript.txt
-                   // TODO ON RETURN we need the hash id to efficiently find the file
-                   // until we add the database
-                   // and the non uploading pathway does not produce a hash.
-                   //  and even if it did, we'd have to re-work it to change the file name of the file that was already in the input dir
-                   // which is not great.
-                   // we may just have to bite the bullet and wire in postgres. Take the hash OUT of the file name
-                   // and put it in postgres along with the job id and the file name path which may or may not be, the h
-                   // job id depending on how the file was sourced
-                   // for now i can just og to the output dir and see what's there.
-                Path transcriptFile = transcriptDir.resolve("transcript.txt");
-                if (Files.exists(transcriptFile)) {
-                    String transcript = Files.readString(transcriptFile);
-                    WhisperStatus status = new CompletedStatus("completed", transcript);
-                    WhisperResponse response = WhisperResponse.builder()
-                        .jobId(jobId)
-                        .status(status)
-                        .build();
-                    return ResponseEntity.ok(response);
-                }
-            } catch (IOException e) {
-                return ResponseEntity.internalServerError().build();
+        try {
+            UUID uuid = UUID.fromString(jobId);
+            WhisperJob job = whisperJobRepository.findById(uuid).block();
+            if (job == null) {
+                return ResponseEntity.notFound().build();
             }
+            WhisperStatus status;
+            if ("completed".equals(job.getStatus())) {
+                status = new CompletedStatus("completed", job.getTranscriptText());
+            } else {
+                status = new PendingStatus("pending");
+            }
+            WhisperResponse response = WhisperResponse.builder()
+                .jobId(jobId)
+                .status(status)
+                .videoPath(job.getVideoPath())
+                .build();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
         }
-        return ResponseEntity.notFound().build();
     }
 
     @GetMapping("/jobs")
     public ResponseEntity<WhisperCollectionResponse> listJobs() {
         try {
-            List<String> jobIds = Files.list(Paths.get(transcriptOutputBasePath))
-                .filter(Files::isDirectory)
-                .map(p -> p.getFileName().toString())
-                .collect(Collectors.toList());
+            List<String> jobIds = whisperJobRepository.findAll()
+                .map(job -> job.getId().toString())
+                .collectList()
+                .block();
             WhisperCollectionResponse response = new WhisperCollectionResponse(jobIds);
             return ResponseEntity.ok(response);
-        } catch (IOException e) {
+        } catch (Exception e) {
             return ResponseEntity.internalServerError().build();
         }
     }

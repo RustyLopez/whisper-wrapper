@@ -40,11 +40,13 @@ services:
       SPRING_R2DBC_DATASOURCE_PASSWORD: password
       MEDIA_INPUT: /media-input
       TRANSCRIPT_OUTPUT: /transcript-output
+      VIDEO_OUTPUT: /video-output
 #      SPRING_DATASOURCE_USERNAME: user
 #      SPRING_DATASOURCE_PASSWORD: password
     volumes:
       - ./media-input:/media-input
       - ./transcript-output:/transcript-output
+      - ./video-output:/video-output
 
 #volumes:
 #  postgres_data:
