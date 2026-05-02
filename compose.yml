@@ -12,9 +12,9 @@ services:
       retries: 5
       start_period: 15s
     environment:
-      SPRING_VECTOR_DB_POSTGRES_DATASOURCE_URL: jdbc:postgresql://postgres-w-vector:5432/video_notes
-      SPRING_VECTOR_DB_POSTGRES_DATASOURCE_USERNAME: user
-      SPRING_VECTOR_DB_POSTGRES_DATASOURCE_PASSWORD: password
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: video_notes
     ports:
       - "5432:5432"
     volumes:
@@ -28,6 +28,16 @@ services:
       postgres-w-vector:
         condition: service_healthy
     environment:
+      SPRING_VECTOR_DB_POSTGRES_DATASOURCE_URL: jdbc:postgresql://postgres-w-vector:5432/video_notes
+      SPRING_VECTOR_DB_POSTGRES_DATASOURCE_USERNAME: user
+      SPRING_VECTOR_DB_POSTGRES_DATASOURCE_PASSWORD: password
+      # currently the same datasource with different protocol, but it's important to note that
+      #  A) this doesn't have to be true
+      # and B) we don't want to use the non r2dbc datasource with the r2dbc datasource for standard pg queries.
+      #  The non r2dbc datasource is for vector db enly.
+      SPRING_R2DBC_DATASOURCE_URL: r2dbc:postgresql://postgres-w-vector:5432/video_notes
+      SPRING_R2DBC_DATASOURCE_USERNAME: user
+      SPRING_R2DBC_DATASOURCE_PASSWORD: password
       MEDIA_INPUT: /media-input
       TRANSCRIPT_OUTPUT: /transcript-output
 #      SPRING_DATASOURCE_USERNAME: user
