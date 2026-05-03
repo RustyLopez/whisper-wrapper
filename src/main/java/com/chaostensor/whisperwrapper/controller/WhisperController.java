@@ -15,7 +15,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -45,8 +44,8 @@ import java.util.stream.Collectors;
  *   But we may also need to work out how to ensure that the model remains loaded and is shared across cli invocations.
  */
 @RestController
-@RequestMapping("/insanely-fast-whisper")
-public class InsanelyFastWhisperController {
+@RequestMapping("/whisper")
+public class WhisperController {
 
     /**
      * Mount your docker external path here. Unless just running locally via spring boot. In which case configure this via env
@@ -70,7 +69,7 @@ public class InsanelyFastWhisperController {
     private final WhisperJobRepository whisperJobRepository;
 
 
-    public InsanelyFastWhisperController(WhisperJobRepository whisperJobRepository) {
+    public WhisperController(WhisperJobRepository whisperJobRepository) {
         this.whisperJobRepository = whisperJobRepository;
     }
 
