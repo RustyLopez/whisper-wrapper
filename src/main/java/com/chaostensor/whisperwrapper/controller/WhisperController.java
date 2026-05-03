@@ -14,6 +14,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.http.MediaType;
 import reactor.core.publisher.Mono;
 
 import java.io.BufferedReader;
@@ -103,11 +106,25 @@ public class WhisperController {
      * Uses hash of file content + UUID as filename, checks for duplicates.
      */
     @PostMapping("/upload")
-    public Mono<ResponseEntity<WhisperResponse>> createFromUpload(@ModelAttribute WhisperUploadRequest uploadRequest) {
+    public Mono<ResponseEntity<WhisperResponse>> createFromUpload(@RequestPart("file") MultipartFile file,
+                                                                  @RequestPart(value = "task", required = false) String task,
+                                                                  @RequestPart(value = "language", required = false) String language,
+                                                                  @RequestPart(value = "timestamp", required = false) String timestamp,
+                                                                  @RequestPart(value = "numSpeakers", required = false) Integer numSpeakers,
+                                                                  @RequestPart(value = "minSpeakers", required = false) Integer minSpeakers,
+                                                                  @RequestPart(value = "maxSpeakers", required = false) Integer maxSpeakers) {
 
         final UUID jobId = UUID.randomUUID();
 
-        MultipartFile file = uploadRequest.getFile();
+        WhisperUploadRequest uploadRequest = WhisperUploadRequest.builder()
+                .file(file)
+                .task(task)
+                .language(language)
+                .timestamp(timestamp)
+                .numSpeakers(numSpeakers)
+                .minSpeakers(minSpeakers)
+                .maxSpeakers(maxSpeakers)
+                .build();
 
         return computeHashCheckExistsAndSaveFile(file, jobId)
                 .flatMap(hashAndFilename -> {

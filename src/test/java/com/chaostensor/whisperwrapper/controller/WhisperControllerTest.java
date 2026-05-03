@@ -24,6 +24,12 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.web.reactive.function.BodyInserters;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 
 import java.util.UUID;
 import java.nio.file.Files;
@@ -160,6 +166,35 @@ class WhisperControllerTest {
     }
 
     @Test
+    void create_WithAllParameters_ReturnsJobId() throws Exception {
+        String filename = "test2.mp4";
+        Path mediaPath = Paths.get("./media-input");
+        Files.createDirectories(mediaPath);
+        Path filePath = mediaPath.resolve(filename);
+        Files.write(filePath, "test content".getBytes());
+
+        WhisperRequest request = WhisperRequest.builder()
+                .fileName(filename)
+                .task("translate")
+                .language("en")
+                .timestamp("srt")
+                .numSpeakers(2)
+                .minSpeakers(1)
+                .maxSpeakers(3)
+                .build();
+
+        webTestClient.post()
+                .uri("/whispers")
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.jobId").exists();
+
+        Files.deleteIfExists(filePath);
+    }
+
+    @Test
     @Transactional
     @Commit
     void create_WithDuplicateRequest_ReturnsError() throws Exception {
@@ -201,8 +236,6 @@ class WhisperControllerTest {
         }
         return result.toString();
     }
-
-
 
     // More tests will be added
 }
