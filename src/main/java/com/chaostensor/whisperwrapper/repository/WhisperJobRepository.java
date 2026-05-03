@@ -14,4 +14,6 @@ public interface WhisperJobRepository extends ReactiveCrudRepository<WhisperJob,
     Flux<WhisperJob> findAll();
 
     Mono<WhisperJob> findById(UUID id);
+
+    Mono<WhisperJob> findByHash(String hash);
 }
