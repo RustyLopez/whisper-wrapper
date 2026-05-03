@@ -11,3 +11,8 @@ spring:
     name: whisper-wrapper
 #  liquibase:
 #    enabled: false
+
+app:
+  media-input: ${MEDIA_INPUT:./media-input} # TODO use an env var with a fallback to the process working dir / media
+  transcript-output: ${TRANSCRIPT_OUTPUT:./transcript-output} # TODO use an env var with a fallback to the process working dir / media
+  video-output: ${VIDEO_OUTPUT:./video-output}
