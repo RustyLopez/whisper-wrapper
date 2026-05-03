@@ -85,17 +85,21 @@ public class InsanelyFastWhisperController {
 
         final UUID jobId = UUID.randomUUID();
 
-        // Save job to DB
-        WhisperJob job = new WhisperJob(jobId, null, "pending", null, request.getFileName());
+        Path filePath = Paths.get(mediaBasePath).resolve(request.getFileName());
 
-        // Kick off the whisper job asynchronously
-        return whisperJobRepository.save(job)
-                .doOnSuccess(savedJob -> processJobAsync(savedJob, request, jobId).subscribe())
-                .thenReturn(ResponseEntity.ok(
-                        WhisperResponse.builder()
-                                .jobId(jobId.toString()).build()
-                ));
+        return computeFileHash(filePath)
+                .flatMap(hash -> {
+                    // Save job to DB with computed hash
+                    WhisperJob job = new WhisperJob(jobId, hash, "pending", null, request.getFileName());
 
+                    // Kick off the whisper job asynchronously
+                    return whisperJobRepository.save(job)
+                            .doOnSuccess(savedJob -> processJobAsync(savedJob, request, jobId).subscribe())
+                            .thenReturn(ResponseEntity.ok(
+                                    WhisperResponse.builder()
+                                            .jobId(jobId.toString()).build()
+                            ));
+                });
 
     }
 
@@ -221,19 +225,32 @@ public class InsanelyFastWhisperController {
         return result.toString();
     }
 
+    /**
+     * Computes SHA-256 hash of a file using streaming approach.
+     */
+    private Mono<String> computeFileHash(Path filePath) {
+        return Mono.fromCallable(() -> {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            try (var inputStream = Files.newInputStream(filePath)) {
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    digest.update(buffer, 0, bytesRead);
+                }
+            }
+            byte[] hashBytes = digest.digest();
+            return bytesToHex(hashBytes);
+        });
+    }
+
 
     private Mono<Void> processJobAsync(WhisperJob job, WhisperRequest request, UUID jobId) {
-        return Mono.fromCallable(() -> {
-            kickOffWhisperJob(request, jobId);
-            return (Void) null;
-        })
-        .then(Mono.fromCallable(() -> {
-            String transcript = Files.readString(Paths.get(transcriptOutputBasePath).resolve(jobId.toString()).resolve("transcript.txt"));
+        return Mono.fromCallable(() -> kickOffWhisperJob(request, jobId))
+        .flatMap(transcript -> {
             job.setStatus("completed");
             job.setTranscriptText(transcript);
-            return job;
-        }))
-        .flatMap(updatedJob -> whisperJobRepository.save(updatedJob))
+            return whisperJobRepository.save(job);
+        })
         .then(Mono.fromCallable(() -> {
             Path source = Paths.get(mediaBasePath).resolve(request.getFileName());
             Path dest = Paths.get(videoOutputBasePath).resolve(request.getFileName());
@@ -247,34 +264,26 @@ public class InsanelyFastWhisperController {
         });
     }
 
-      /**
-       * TODO Needs to save the output in a db with the job id
-       *   a lot of what initially went into the other service actually needs to go here.
-       *   The other service will just be handing requests off between the different models
-       *   but we need these different steps to be hosted by different services so that
-       *   they can be scaled independently
-       */
-       private void kickOffWhisperJob(final WhisperRequest request, final UUID jobId) {
-         final Process process;
-         try {
-             List<String> command = new ArrayList<>();
-             command.add("insanely-fast-whisper");
-             command.add("--file-name");
-               // TODO ensure this can't result in directory traversal.
-               // TODO ensure user has access rights to read and transcribe the video. Future task for if we ever make
-               //  this wrapper more standalone
-             command.add(Paths.get(mediaBasePath).resolve(request.getFileName()).normalize().toString());
+       /**
+        * Executes the whisper job and returns the transcript text.
+        * Captures transcript from stdout instead of writing to disk.
+        */
+        private String kickOffWhisperJob(final WhisperRequest request, final UUID jobId) {
+          final Process process;
+          try {
+              List<String> command = new ArrayList<>();
+              command.add("insanely-fast-whisper");
+              command.add("--file-name");
+                // TODO ensure this can't result in directory traversal.
+                // TODO ensure user has access rights to read and transcribe the video. Future task for if we ever make
+                //  this wrapper more standalone
+              command.add(Paths.get(mediaBasePath).resolve(request.getFileName()).normalize().toString());
 
-             // TODO Not likely needed for our use case or something the client would know, or that we would want them to know
-             //if (request.getDeviceId() != null && !request.getDeviceId().isEmpty()) {
-             //    command.add("--device-id");
-             //    command.add(request.getDeviceId());
-             //}
-
-              // Generate UUID-based transcript path relative to the configured base path
-              String transcriptPath = Paths.get(transcriptOutputBasePath).resolve(jobId.toString()).toString();
-              command.add("--transcript-path");
-              command.add(transcriptPath);
+              // TODO Not likely needed for our use case or something the client would know, or that we would want them to know
+              //if (request.getDeviceId() != null && !request.getDeviceId().isEmpty()) {
+              //    command.add("--device-id");
+              //    command.add(request.getDeviceId());
+              //}
 
              // External process should not be able to give us their hf tokens or
              // trigger download of a model we don't already support.
@@ -341,7 +350,8 @@ public class InsanelyFastWhisperController {
         final BufferedReader solveOutput = new BufferedReader(new InputStreamReader(process.getInputStream()));
         final BufferedReader solveErrors = new BufferedReader(new InputStreamReader(process.getErrorStream()));
 
-        solveOutput.lines().forEach(System.out::println);
+        // Collect all output lines as the transcript
+        String transcript = solveOutput.lines().collect(Collectors.joining("\n"));
 
         try {
 
@@ -378,6 +388,8 @@ public class InsanelyFastWhisperController {
              */
             throw new RuntimeException("Process failed: " + solveErrors.lines().collect(Collectors.joining()));
         }
+
+        return transcript;
     }
 
 
