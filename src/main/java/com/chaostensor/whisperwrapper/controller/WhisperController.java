@@ -226,15 +226,13 @@ public class WhisperController {
 
     private Mono<HashAndFilename> computeHashCheckExistsAndSaveFile(MultipartFile file, UUID jobId) {
         return computeFileHash(file)
-                .flatMap(hash -> checkHashExists(hash)
-                        .flatMap(exists -> {
-                            if (exists) {
-                                return Mono.just(new HashAndFilename(hash, null));
-                            }
+                .flatMap(hash -> whisperJobRepository.findByHash(hash)
+                        .flatMap(job -> Mono.just(new HashAndFilename(hash, job.getVideoPath())))
+                        .switchIfEmpty(Mono.defer(() -> {
                             String uniqueFilename = jobId.toString();
                             return saveFile(file, uniqueFilename)
                                     .then(Mono.just(new HashAndFilename(hash, uniqueFilename)));
-                        }));
+                        })));
     }
 
     private Mono<ResponseEntity<WhisperResponse>> createAndStartJob(UUID jobId, String hash, String filename, WhisperRequest request) {
