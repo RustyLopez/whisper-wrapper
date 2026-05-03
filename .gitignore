@@ -65,7 +65,7 @@ build/
 *.bmp
 *.tiff
 
-
+models
 media-input
 transcript-output
 video-output

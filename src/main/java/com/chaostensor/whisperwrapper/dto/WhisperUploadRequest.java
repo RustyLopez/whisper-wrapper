@@ -3,10 +3,12 @@ package com.chaostensor.whisperwrapper.dto;
 
 import lombok.Builder;
 import lombok.Value;
+import lombok.extern.jackson.Jacksonized;
 import org.springframework.web.multipart.MultipartFile;
 
 @Value
 @Builder
+@Jacksonized
 public class WhisperUploadRequest {
 
     /**

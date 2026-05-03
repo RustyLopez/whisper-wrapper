@@ -10,6 +10,7 @@ import com.chaostensor.whisperwrapper.dto.WhisperCollectionResponse;
 import com.chaostensor.whisperwrapper.dto.PendingStatus;
 import com.chaostensor.whisperwrapper.entity.WhisperJob;
 import com.chaostensor.whisperwrapper.repository.WhisperJobRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -48,6 +49,7 @@ import java.util.stream.Collectors;
  */
 @RestController
 @RequestMapping("/whispers")
+@Slf4j
 public class WhisperController {
 
     /**
@@ -83,20 +85,27 @@ public class WhisperController {
      * TODO: ensure we support all the input args of the wrapped processor
      *
      */
-    @PostMapping
-    public Mono<ResponseEntity<WhisperResponse>> create(@RequestBody WhisperRequest request) {
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+    public Mono<ResponseEntity<WhisperResponse>> create(@RequestBody Mono<WhisperRequest> request) {
 
-        final UUID jobId = UUID.randomUUID();
 
-        Path filePath = Paths.get(mediaBasePath).resolve(request.getFileName());
+        return request.flatMap(whisperRequest -> {
+            final UUID jobId = UUID.randomUUID();
 
-        return computeHashAndCheckExists(filePath)
-                .flatMap(hashAndExists -> {
-                    if (hashAndExists.exists()) {
-                        return Mono.error(new DuplicateRequestException());
-                    }
-                    return createAndStartJob(jobId, hashAndExists.hash(), request.getFileName(), request);
+            Path filePath = Paths.get(mediaBasePath).resolve(whisperRequest.getFileName());
+
+            return computeHashAndCheckExists(filePath)
+                    .flatMap(hashAndExists -> {
+                        if (hashAndExists.exists()) {
+                            return Mono.error(new DuplicateRequestException());
+                        }
+                        return createAndStartJob(jobId, hashAndExists.hash(), whisperRequest.getFileName(), whisperRequest);
+                    });
+        })
+                .doOnError(e -> {
+                    log.error("create error", e);
                 });
+
 
     }
 
@@ -105,7 +114,7 @@ public class WhisperController {
      * Saves the uploaded file to mediaBasePath and kicks off the whisper job.
      * Uses hash of file content + UUID as filename, checks for duplicates.
      */
-    @PostMapping("/upload")
+    @PostMapping(value = "/upload", consumes = MediaType.APPLICATION_JSON_VALUE)
     public Mono<ResponseEntity<WhisperResponse>> createFromUpload(@RequestPart("file") MultipartFile file,
                                                                   @RequestPart(value = "task", required = false) String task,
                                                                   @RequestPart(value = "language", required = false) String language,

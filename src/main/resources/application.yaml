@@ -25,6 +25,11 @@ spring:
       max-file-size: ${MAX_FILE_SIZE:1GB}
       max-request-size: ${MAX_REQUEST_SIZE:1025MB}
 
+logging:
+  level:
+    org.springframework.web.reactive: DEBUG
+    reactor.netty: DEBUG
+
 app:
   media-input: ${MEDIA_INPUT:./media-input} # TODO use an env var with a fallback to the process working dir / media
   transcript-output: ${TRANSCRIPT_OUTPUT:./transcript-output} # TODO use an env var with a fallback to the process working dir / media
