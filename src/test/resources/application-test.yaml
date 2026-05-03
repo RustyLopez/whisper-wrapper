@@ -1,0 +1,13 @@
+spring:
+  profiles:
+    # NOTE: Security: Caution: For now hosting only as an internal docker service used by a separate app in the same docker env.
+    # The app currently exposes the transcribe operation, though that does let you specify a known path.
+    # so in theory there is some risk of extracting transcripts from videos on disk if this were opened up.
+    # not an issue for now but we'll probably want to add some server to server auth solution when we push this into eks.
+    active:
+      - internal-only
+      - test
+  application:
+    name: whisper-wrapper
+  liquibase:
+    enabled: false
