@@ -204,39 +204,52 @@ public class WhisperController {
         return bytesToHex(hashBytes);
     }
 
+    private Mono<Boolean> checkHashExists(String hash) {
+        return whisperJobRepository.findByHash(hash).hasElement();
+    }
+
+    private Mono<Void> saveFile(MultipartFile file, String filename) {
+        Path mediaPath = Paths.get(mediaBasePath);
+        Path targetPath = mediaPath.resolve(filename);
+        return Mono.fromCallable(() -> {
+            Files.createDirectories(mediaPath);
+            Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+            return null;
+        });
+    }
+
+    private Mono<WhisperJob> createJob(UUID jobId, String hash, String filename) {
+        WhisperJob job = new WhisperJob(jobId, hash, "pending", null, filename);
+        return whisperJobRepository.save(job);
+    }
+
+    private void startJob(WhisperJob job, WhisperRequest request) {
+        processJobAsync(job, request, job.getId()).subscribe();
+    }
+
     private Mono<HashAndExists> computeHashAndCheckExists(Path filePath) {
-        Mono<String> hashMono = computeFileHash(filePath);
-        Mono<Boolean> existsMono = hashMono.flatMap(hash -> whisperJobRepository.findByHash(hash).hasElement());
-        return Mono.zip(hashMono, existsMono)
-                .map(tuple -> new HashAndExists(tuple.getT1(), tuple.getT2()));
+        return computeFileHash(filePath)
+                .flatMap(hash -> checkHashExists(hash)
+                        .map(exists -> new HashAndExists(hash, exists)));
     }
 
     private Mono<HashAndFilename> computeHashCheckExistsAndSaveFile(MultipartFile file, UUID jobId) {
-        Mono<String> hashMono = computeFileHash(file);
-        Mono<Boolean> existsMono = hashMono.flatMap(hash -> whisperJobRepository.findByHash(hash).hasElement());
-        return Mono.zip(hashMono, existsMono)
-                .flatMap(tuple -> {
-                    String hash = tuple.getT1();
-                    boolean exists = tuple.getT2();
-                    if (exists) {
-                        return Mono.just(new HashAndFilename(hash, null));
-                    } else {
-                        String uniqueFilename = jobId.toString();
-                        Path mediaPath = Paths.get(mediaBasePath);
-                        Path targetPath = mediaPath.resolve(uniqueFilename);
-                        return Mono.fromCallable(() -> {
-                            Files.createDirectories(mediaPath);
-                            Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
-                            return new HashAndFilename(hash, uniqueFilename);
-                        });
-                    }
-                });
+        return computeFileHash(file)
+                .flatMap(hash -> checkHashExists(hash)
+                        .flatMap(exists -> {
+                            if (exists) {
+                                return Mono.just(new HashAndFilename(hash, null));
+                            } else {
+                                String uniqueFilename = jobId.toString();
+                                return saveFile(file, uniqueFilename)
+                                        .then(Mono.just(new HashAndFilename(hash, uniqueFilename)));
+                            }
+                        }));
     }
 
     private Mono<ResponseEntity<WhisperResponse>> createAndStartJob(UUID jobId, String hash, String filename, WhisperRequest request) {
-        WhisperJob job = new WhisperJob(jobId, hash, "pending", null, filename);
-        return whisperJobRepository.save(job)
-                .doOnSuccess(savedJob -> processJobAsync(savedJob, request, jobId).subscribe())
+        return createJob(jobId, hash, filename)
+                .doOnSuccess(job -> startJob(job, request))
                 .thenReturn(ResponseEntity.ok(
                         WhisperResponse.builder()
                                 .jobId(jobId.toString()).build()
