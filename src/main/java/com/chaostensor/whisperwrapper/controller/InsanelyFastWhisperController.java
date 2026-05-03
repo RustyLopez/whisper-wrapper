@@ -198,32 +198,29 @@ public class InsanelyFastWhisperController {
      */
     private Mono<String> computeFileHash(Path filePath) {
         return Mono.fromCallable(() -> {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
             try (var inputStream = Files.newInputStream(filePath)) {
-                byte[] buffer = new byte[8192];
-                int bytesRead;
-                while ((bytesRead = inputStream.read(buffer)) != -1) {
-                    digest.update(buffer, 0, bytesRead);
-                }
+                return computeHashFromInputStream(inputStream);
             }
-            byte[] hashBytes = digest.digest();
-            return bytesToHex(hashBytes);
         });
     }
 
     private Mono<String> computeFileHash(MultipartFile file) {
         return Mono.fromCallable(() -> {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
             try (var inputStream = file.getInputStream()) {
-                byte[] buffer = new byte[8192];
-                int bytesRead;
-                while ((bytesRead = inputStream.read(buffer)) != -1) {
-                    digest.update(buffer, 0, bytesRead);
-                }
+                return computeHashFromInputStream(inputStream);
             }
-            byte[] hashBytes = digest.digest();
-            return bytesToHex(hashBytes);
         });
+    }
+
+    private String computeHashFromInputStream(InputStream inputStream) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        byte[] buffer = new byte[8192];
+        int bytesRead;
+        while ((bytesRead = inputStream.read(buffer)) != -1) {
+            digest.update(buffer, 0, bytesRead);
+        }
+        byte[] hashBytes = digest.digest();
+        return bytesToHex(hashBytes);
     }
 
     private Mono<ResponseEntity<WhisperResponse>> createAndStartJob(UUID jobId, String hash, String filename, WhisperRequest request) {
