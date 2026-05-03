@@ -123,7 +123,7 @@ public class InsanelyFastWhisperController {
             }
             byte[] hashBytes = digest.digest();
             return bytesToHex(hashBytes);
-        }).subscribeOn(Schedulers.boundedElastic())
+        })
         .<ResponseEntity<WhisperResponse>>flatMap(hash -> {
             Path mediaPath = Paths.get(mediaBasePath);
             return Mono.fromCallable(() -> {
@@ -131,7 +131,7 @@ public class InsanelyFastWhisperController {
                 try (var paths = Files.list(mediaPath)) {
                     return paths.anyMatch(path -> path.getFileName().toString().startsWith(hash));
                 }
-            }).subscribeOn(Schedulers.boundedElastic())
+            })
             .flatMap(isDuplicate -> {
                 if (isDuplicate) {
                     return Mono.error(DuplicateRequestException::new);
@@ -145,7 +145,7 @@ public class InsanelyFastWhisperController {
                     // Copy the file
                     Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
                     return uniqueFilename;
-                }).subscribeOn(Schedulers.boundedElastic())
+                })
                 .<ResponseEntity<WhisperResponse>>flatMap(filename -> {
                     // Save job to DB
                     WhisperJob job = new WhisperJob(jobId, hash, "pending", null, filename);
@@ -226,13 +226,13 @@ public class InsanelyFastWhisperController {
         return Mono.fromCallable(() -> {
             kickOffWhisperJob(request, jobId);
             return (Void) null;
-        }).subscribeOn(Schedulers.boundedElastic())
+        })
         .then(Mono.fromCallable(() -> {
             String transcript = Files.readString(Paths.get(transcriptOutputBasePath).resolve(jobId.toString()).resolve("transcript.txt"));
             job.setStatus("completed");
             job.setTranscriptText(transcript);
             return job;
-        }).subscribeOn(Schedulers.boundedElastic()))
+        }))
         .flatMap(updatedJob -> whisperJobRepository.save(updatedJob))
         .then(Mono.fromCallable(() -> {
             Path source = Paths.get(mediaBasePath).resolve(request.getFileName());
@@ -240,7 +240,7 @@ public class InsanelyFastWhisperController {
             Files.createDirectories(dest.getParent());
             Files.move(source, dest);
             return (Void) null;
-        }).subscribeOn(Schedulers.boundedElastic()))
+        }))
         .doOnError(e -> {
             job.setStatus("failed");
             whisperJobRepository.save(job).subscribe(); // fire and forget
