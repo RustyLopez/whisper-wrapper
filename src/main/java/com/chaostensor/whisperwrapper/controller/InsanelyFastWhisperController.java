@@ -91,30 +91,7 @@ public class InsanelyFastWhisperController {
 
         // Kick off the whisper job asynchronously
         return whisperJobRepository.save(job)
-                        .then(Mono.fromRunnable(() -> {
-                            try {
-                                kickOffWhisperJob(request, jobId);
-                                // On success, update DB and move file
-                                String transcript = Files.readString(Paths.get(transcriptOutputBasePath).resolve(jobId.toString()).resolve("transcript.txt"));
-                                job.setStatus("completed");
-                                job.setTranscriptText(transcript);
-                                whisperJobRepository.save(job).block();
-
-                                // Move video to output dir
-                                Path source = Paths.get(mediaBasePath).resolve(request.getFileName());
-                                Path dest = Paths.get(videoOutputBasePath).resolve(request.getFileName());
-                                Files.createDirectories(dest.getParent());
-                                Files.move(source, dest);
-
-                            } catch (Exception e) {
-                                // On failure, update status to failed
-                                job.setStatus("failed");
-                                whisperJobRepository.save(job).block();
-                            }
-                            /*
-                             * TODO on error or on timeout, write either result. We'll want an admin ui to be able to retry those.
-                             */
-                        }))
+                .doOnSuccess(savedJob -> processJobAsync(savedJob, request, jobId).subscribe())
                 .thenReturn(ResponseEntity.ok(
                         WhisperResponse.builder()
                                 .jobId(jobId.toString()).build()
@@ -129,13 +106,13 @@ public class InsanelyFastWhisperController {
      * Uses hash of file content + UUID as filename, checks for duplicates.
      */
     @PostMapping("/upload")
-    public Mono<ResponseEntity<WhisperResponse>> createJobFromUpload(@ModelAttribute WhisperUploadRequest uploadRequest) {
+    public Mono<ResponseEntity<?>> createJobFromUpload(@ModelAttribute WhisperUploadRequest uploadRequest) {
 
         final UUID jobId = UUID.randomUUID();
 
-        try {
-            MultipartFile file = uploadRequest.getFile();
+        MultipartFile file = uploadRequest.getFile();
 
+        return Mono.fromCallable(() -> {
             // Compute SHA-256 hash of the file using streaming
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             try (var inputStream = file.getInputStream()) {
@@ -146,78 +123,58 @@ public class InsanelyFastWhisperController {
                 }
             }
             byte[] hashBytes = digest.digest();
-            String hash = bytesToHex(hashBytes);
-
-            // Left edge match scan: check if any files in mediaBasePath start with this hash
+            return bytesToHex(hashBytes);
+        }).subscribeOn(Schedulers.boundedElastic())
+        .flatMap(hash -> {
             Path mediaPath = Paths.get(mediaBasePath);
-            Files.createDirectories(mediaPath); // ensure directory exists
-            boolean isDuplicate;
-            try (var paths = Files.list(mediaPath)) {
-                isDuplicate = paths.anyMatch(path -> path.getFileName().toString().startsWith(hash));
-            }
-
-            if (isDuplicate) {
-                return Mono.just(ResponseEntity.badRequest().build());
-            }
-
-            // Generate filename: UUID only (ignore provided name)
-            String uniqueFilename = jobId.toString();
-            Path targetPath = mediaPath.resolve(uniqueFilename);
-
-            // Copy the file
-            Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
-
-            // Save job to DB
-            WhisperJob job = new WhisperJob(jobId, hash, "pending", null, uniqueFilename);
-            whisperJobRepository.save(job).block(); // sync save
-
-            // Create WhisperRequest with the saved file path (relative to mediaBasePath)
-            WhisperRequest request = WhisperRequest.builder()
-                    .fileName(uniqueFilename)
-                    .task(uploadRequest.getTask())
-                    .language(uploadRequest.getLanguage())
-                    .timestamp(uploadRequest.getTimestamp())
-                    .numSpeakers(uploadRequest.getNumSpeakers())
-                    .minSpeakers(uploadRequest.getMinSpeakers())
-                    .maxSpeakers(uploadRequest.getMaxSpeakers())
-                    .build();
-
-            // Kick off the whisper job asynchronously
-            Mono.fromRunnable(() -> {
-                try {
-                    kickOffWhisperJob(request, jobId);
-                    // On success, update DB and move file
-                    String transcript = Files.readString(Paths.get(transcriptOutputBasePath).resolve(jobId.toString()).resolve("transcript.txt"));
-                    job.setStatus("completed");
-                    job.setTranscriptText(transcript);
-                    whisperJobRepository.save(job).block();
-
-                    // Move video to output dir
-                    Path source = Paths.get(mediaBasePath).resolve(uniqueFilename);
-                    Path dest = Paths.get(videoOutputBasePath).resolve(uniqueFilename);
-                    Files.createDirectories(dest.getParent());
-                    Files.move(source, dest);
-
-                } catch (Exception e) {
-                    // On failure, update status to failed
-                    job.setStatus("failed");
-                    whisperJobRepository.save(job).block();
+            return Mono.fromCallable(() -> {
+                Files.createDirectories(mediaPath); // ensure directory exists
+                try (var paths = Files.list(mediaPath)) {
+                    return paths.anyMatch(path -> path.getFileName().toString().startsWith(hash));
                 }
-            }).subscribeOn(Schedulers.boundedElastic()).subscribe();
+            }).subscribeOn(Schedulers.boundedElastic())
+            .flatMap(isDuplicate -> {
+                if (isDuplicate) {
+                    return Mono.just((ResponseEntity<?>) ResponseEntity.badRequest().build());
+                }
 
-        } catch (IOException | NoSuchAlgorithmException e) {
-            throw new RuntimeException("Failed to process uploaded file", e);
-        }
+                // Generate filename: UUID only (ignore provided name)
+                String uniqueFilename = jobId.toString();
+                Path targetPath = mediaPath.resolve(uniqueFilename);
 
-        /**
-         * Return the job id immediately, even before processing is complete
-         */
-        return Mono.just(
-                ResponseEntity.ok(
-                        WhisperResponse.builder()
-                                .jobId(jobId.toString()).build()
-                )
-        );
+                return Mono.fromCallable(() -> {
+                    // Copy the file
+                    Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+                    return uniqueFilename;
+                }).subscribeOn(Schedulers.boundedElastic())
+                .flatMap(filename -> {
+                    // Save job to DB
+                    WhisperJob job = new WhisperJob(jobId, hash, "pending", null, filename);
+                    return whisperJobRepository.save(job)
+                        .flatMap(savedJob -> {
+                            // Create WhisperRequest with the saved file path (relative to mediaBasePath)
+                            WhisperRequest request = WhisperRequest.builder()
+                                    .fileName(filename)
+                                    .task(uploadRequest.getTask())
+                                    .language(uploadRequest.getLanguage())
+                                    .timestamp(uploadRequest.getTimestamp())
+                                    .numSpeakers(uploadRequest.getNumSpeakers())
+                                    .minSpeakers(uploadRequest.getMinSpeakers())
+                                    .maxSpeakers(uploadRequest.getMaxSpeakers())
+                                    .build();
+
+                            // Kick off the whisper job asynchronously
+                            processJobAsync(savedJob, request, jobId).subscribe();
+
+                            return (Mono<ResponseEntity<?>>) Mono.just(ResponseEntity.ok(
+                                    WhisperResponse.builder()
+                                            .jobId(jobId.toString()).build()
+                            ));
+                        });
+                });
+            });
+        })
+        .onErrorResume(e -> Mono.just(ResponseEntity.internalServerError().build()));
     }
 
     @GetMapping("/{jobId}")
@@ -267,14 +224,39 @@ public class InsanelyFastWhisperController {
     }
 
 
-     /**
-      * TODO Needs to save the output in a db with the job id
-      *   a lot of what initially went into the other service actually needs to go here.
-      *   The other service will just be handing requests off between the different models
-      *   but we need these different steps to be hosted by different services so that
-      *   they can be scaled independently
-      */
-      private void kickOffWhisperJob(final WhisperRequest request, final UUID jobId) {
+    private Mono<Void> processJobAsync(WhisperJob job, WhisperRequest request, UUID jobId) {
+        return Mono.fromCallable(() -> {
+            kickOffWhisperJob(request, jobId);
+            return (Void) null;
+        }).subscribeOn(Schedulers.boundedElastic())
+        .then(Mono.fromCallable(() -> {
+            String transcript = Files.readString(Paths.get(transcriptOutputBasePath).resolve(jobId.toString()).resolve("transcript.txt"));
+            job.setStatus("completed");
+            job.setTranscriptText(transcript);
+            return job;
+        }).subscribeOn(Schedulers.boundedElastic()))
+        .flatMap(updatedJob -> whisperJobRepository.save(updatedJob))
+        .then(Mono.fromCallable(() -> {
+            Path source = Paths.get(mediaBasePath).resolve(request.getFileName());
+            Path dest = Paths.get(videoOutputBasePath).resolve(request.getFileName());
+            Files.createDirectories(dest.getParent());
+            Files.move(source, dest);
+            return (Void) null;
+        }).subscribeOn(Schedulers.boundedElastic()))
+        .doOnError(e -> {
+            job.setStatus("failed");
+            whisperJobRepository.save(job).subscribe(); // fire and forget
+        });
+    }
+
+      /**
+       * TODO Needs to save the output in a db with the job id
+       *   a lot of what initially went into the other service actually needs to go here.
+       *   The other service will just be handing requests off between the different models
+       *   but we need these different steps to be hosted by different services so that
+       *   they can be scaled independently
+       */
+       private void kickOffWhisperJob(final WhisperRequest request, final UUID jobId) {
          final Process process;
          try {
              List<String> command = new ArrayList<>();
