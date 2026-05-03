@@ -18,7 +18,7 @@ spring:
     username: ${SPRING_R2DBC_DATASOURCE_USERNAME:user}
     password: ${SPRING_R2DBC_DATASOURCE_PASSWORD:password}
   liquibase:
-    change-log: classpath:db/changelog/db.changelog-master.xml
+    change-log: classpath:db/changelog/db.changelog-master.yaml
     default-schema: public
   servlet:
     multipart:
