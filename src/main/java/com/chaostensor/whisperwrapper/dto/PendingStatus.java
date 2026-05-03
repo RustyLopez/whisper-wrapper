@@ -13,4 +13,9 @@ import lombok.extern.jackson.Jacksonized;
 @JsonTypeName("pending")
 public class PendingStatus implements WhisperStatus {
     String status;
+
+    @Override
+    public String getStatus() {
+        return status;
+    }
 }

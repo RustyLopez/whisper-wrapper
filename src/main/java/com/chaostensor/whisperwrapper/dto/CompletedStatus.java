@@ -14,4 +14,9 @@ import lombok.extern.jackson.Jacksonized;
 public class CompletedStatus implements WhisperStatus {
     String status;
     String transcriptData;
+
+    @Override
+    public String getStatus() {
+        return status;
+    }
 }
