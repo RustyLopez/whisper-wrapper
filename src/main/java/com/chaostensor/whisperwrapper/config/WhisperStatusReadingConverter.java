@@ -1,11 +1,11 @@
 package com.chaostensor.whisperwrapper.config;
 
 import com.chaostensor.whisperwrapper.dto.WhisperStatus;
-import tools.jackson.core.JsonProcessingException;
 import tools.jackson.databind.json.JsonMapper;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.data.convert.ReadingConverter;
 import org.springframework.stereotype.Component;
+
 
 @Component
 @ReadingConverter
@@ -18,10 +18,6 @@ public class WhisperStatusReadingConverter implements Converter<String, WhisperS
 
     @Override
     public WhisperStatus convert(String source) {
-        try {
-            return jsonMapper.readValue(source, WhisperStatus.class);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException("Failed to deserialize WhisperStatus", e);
-        }
+        return jsonMapper.readValue(source, WhisperStatus.class);
     }
 }

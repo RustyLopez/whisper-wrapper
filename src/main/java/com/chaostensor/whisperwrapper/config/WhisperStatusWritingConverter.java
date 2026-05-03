@@ -1,7 +1,6 @@
 package com.chaostensor.whisperwrapper.config;
 
 import com.chaostensor.whisperwrapper.dto.WhisperStatus;
-import tools.jackson.core.JsonProcessingException;
 import tools.jackson.databind.json.JsonMapper;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.data.convert.WritingConverter;
@@ -18,10 +17,6 @@ public class WhisperStatusWritingConverter implements Converter<WhisperStatus, S
 
     @Override
     public String convert(WhisperStatus source) {
-        try {
-            return jsonMapper.writeValueAsString(source);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException("Failed to serialize WhisperStatus", e);
-        }
+        return jsonMapper.writeValueAsString(source);
     }
 }
