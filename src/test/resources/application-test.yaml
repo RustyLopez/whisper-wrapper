@@ -9,5 +9,5 @@ spring:
       - test
   application:
     name: whisper-wrapper
-  liquibase:
-    enabled: false
+#  liquibase:
+#    enabled: false
