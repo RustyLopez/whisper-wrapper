@@ -94,16 +94,7 @@ public class InsanelyFastWhisperController {
                                 if (exists) {
                                     return Mono.error(new DuplicateRequestException());
                                 }
-                                // Save job to DB with computed hash
-                                WhisperJob job = new WhisperJob(jobId, hash, "pending", null, request.getFileName());
-
-                                // Kick off the whisper job asynchronously
-                                return whisperJobRepository.save(job)
-                                        .doOnSuccess(savedJob -> processJobAsync(savedJob, request, jobId).subscribe())
-                                        .thenReturn(ResponseEntity.ok(
-                                                WhisperResponse.builder()
-                                                        .jobId(jobId.toString()).build()
-                                        ));
+                                return createAndStartJob(jobId, hash, request.getFileName(), request);
                             });
                 });
 
@@ -141,29 +132,18 @@ public class InsanelyFastWhisperController {
                         return uniqueFilename;
                     })
                     .flatMap(filename -> {
-                        // Save job to DB
-                        WhisperJob job = new WhisperJob(jobId, hash, "pending", null, filename);
-                        return whisperJobRepository.save(job)
-                            .flatMap(savedJob -> {
-                                // Create WhisperRequest with the saved file path (relative to mediaBasePath)
-                                WhisperRequest request = WhisperRequest.builder()
-                                        .fileName(filename)
-                                        .task(uploadRequest.getTask())
-                                        .language(uploadRequest.getLanguage())
-                                        .timestamp(uploadRequest.getTimestamp())
-                                        .numSpeakers(uploadRequest.getNumSpeakers())
-                                        .minSpeakers(uploadRequest.getMinSpeakers())
-                                        .maxSpeakers(uploadRequest.getMaxSpeakers())
-                                        .build();
+                        // Create WhisperRequest with the saved file path (relative to mediaBasePath)
+                        WhisperRequest request = WhisperRequest.builder()
+                                .fileName(filename)
+                                .task(uploadRequest.getTask())
+                                .language(uploadRequest.getLanguage())
+                                .timestamp(uploadRequest.getTimestamp())
+                                .numSpeakers(uploadRequest.getNumSpeakers())
+                                .minSpeakers(uploadRequest.getMinSpeakers())
+                                .maxSpeakers(uploadRequest.getMaxSpeakers())
+                                .build();
 
-                                // Kick off the whisper job asynchronously
-                                processJobAsync(savedJob, request, jobId).subscribe();
-
-                                return Mono.just(ResponseEntity.ok(
-                                        WhisperResponse.builder()
-                                                .jobId(jobId.toString()).build()
-                                ));
-                            });
+                        return createAndStartJob(jobId, hash, filename, request);
                     });
                 });
         });
@@ -244,6 +224,16 @@ public class InsanelyFastWhisperController {
             byte[] hashBytes = digest.digest();
             return bytesToHex(hashBytes);
         });
+    }
+
+    private Mono<ResponseEntity<WhisperResponse>> createAndStartJob(UUID jobId, String hash, String filename, WhisperRequest request) {
+        WhisperJob job = new WhisperJob(jobId, hash, "pending", null, filename);
+        return whisperJobRepository.save(job)
+                .doOnSuccess(savedJob -> processJobAsync(savedJob, request, jobId).subscribe())
+                .thenReturn(ResponseEntity.ok(
+                        WhisperResponse.builder()
+                                .jobId(jobId.toString()).build()
+                ));
     }
 
 
