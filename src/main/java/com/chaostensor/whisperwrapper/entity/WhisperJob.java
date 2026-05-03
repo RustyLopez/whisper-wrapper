@@ -1,5 +1,6 @@
 package com.chaostensor.whisperwrapper.entity;
 
+import com.chaostensor.whisperwrapper.dto.WhisperStatus;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
@@ -17,7 +18,7 @@ public class WhisperJob {
     private String hash;
 
     @Column("status")
-    private String status;
+    private WhisperStatus status;
 
     @Column("transcript_text")
     private String transcriptText;
@@ -36,7 +37,7 @@ public class WhisperJob {
     public WhisperJob() {
     }
 
-    public WhisperJob(UUID id, String hash, String status, String transcriptText, String videoPath) {
+    public WhisperJob(UUID id, String hash, WhisperStatus status, String transcriptText, String videoPath) {
         this.id = id;
         this.hash = hash;
         this.status = status;
@@ -64,11 +65,11 @@ public class WhisperJob {
         this.hash = hash;
     }
 
-    public String getStatus() {
+    public WhisperStatus getStatus() {
         return status;
     }
 
-    public void setStatus(String status) {
+    public void setStatus(WhisperStatus status) {
         this.status = status;
         this.updatedAt = LocalDateTime.now();
     }

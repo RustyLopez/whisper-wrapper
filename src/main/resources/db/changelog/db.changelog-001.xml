@@ -31,4 +31,8 @@
         </createTable>
     </changeSet>
 
+    <changeSet id="update-status-column-to-json" author="opencode">
+        <modifyDataType tableName="whisper_jobs" columnName="status" newDataType="json"/>
+    </changeSet>
+
 </databaseChangeLog>

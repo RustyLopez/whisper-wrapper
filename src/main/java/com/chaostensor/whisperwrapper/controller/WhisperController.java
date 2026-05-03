@@ -136,16 +136,7 @@ public class WhisperController {
             UUID uuid = UUID.fromString(jobId);
             return whisperJobRepository.findById(uuid)
                     .flatMap(job -> {
-                        WhisperStatus status;
-                        if ("completed".equals(job.getStatus())) {
-                            status = new CompletedStatus("completed", job.getTranscriptText());
-                        } else {
-                            status = new PendingStatus("pending");
-                        }
-                        WhisperResponse response = WhisperResponse.builder()
-                                .jobId(jobId)
-                                .status(status)
-                                .build();
+                        WhisperResponse response = new WhisperResponse(jobId, job.getStatus());
                         return Mono.just(ResponseEntity.ok(response));
                     })
                     .switchIfEmpty(Mono.just(ResponseEntity.notFound().build()));
@@ -219,7 +210,7 @@ public class WhisperController {
     }
 
     private Mono<WhisperJob> createJob(UUID jobId, String hash, String filename) {
-        WhisperJob job = new WhisperJob(jobId, hash, "pending", null, filename);
+        WhisperJob job = new WhisperJob(jobId, hash, new PendingStatus("pending"), null, filename);
         return whisperJobRepository.save(job);
     }
 
@@ -263,7 +254,7 @@ public class WhisperController {
                 })
                 .then(Mono.fromCallable(() -> {
                     String transcript = Files.readString(Paths.get(transcriptOutputBasePath).resolve(jobId.toString()));
-                    job.setStatus("completed");
+                    job.setStatus(new CompletedStatus("completed", transcript));
                     job.setTranscriptText(transcript);
                     return job;
                 }))
@@ -276,7 +267,7 @@ public class WhisperController {
                     return (Void) null;
                 }))
                 .doOnError(e -> {
-                    job.setStatus("failed");
+                    job.setStatus(new PendingStatus("failed"));
                     whisperJobRepository.save(job).subscribe(); // fire and forget
                 });
     }
