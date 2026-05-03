@@ -1,8 +1,17 @@
 package com.chaostensor.whisperwrapper;
 
+
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.r2dbc.core.DatabaseClient;
+import org.testcontainers.junit.jupiter.Container;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 @Testcontainers
 @SpringBootTest
@@ -17,14 +26,14 @@ public class WhisperWrapperApplicationTests {
 
 	@DynamicPropertySource
 	static void registerProperties(DynamicPropertyRegistry registry) {
-		registry.add("spring.r2dbc.url", postgresWithVector::getR2dbcUrl);
+		registry.add("spring.r2dbc.url", () -> postgresWithVector.getJdbcUrl().replace("jdbc:", "r2dbc:"));
 		registry.add("spring.r2dbc.username", postgresWithVector::getUsername);
 		registry.add("spring.r2dbc.password", postgresWithVector::getPassword);
 
 		registry.add("spring.datasource.url", postgresWithVector::getJdbcUrl);
 		registry.add("spring.datasource.username", postgresWithVector::getUsername);
 		registry.add("spring.datasource.password", postgresWithVector::getPassword);
-		registry.add("spring.datasource.driver-class-name", "rg.postgresql.Driver");
+		registry.add("spring.datasource.driver-class-name", ()->"org.postgresql.Driver");
 
 	}
 
