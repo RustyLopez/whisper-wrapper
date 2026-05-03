@@ -35,7 +35,7 @@ import java.util.stream.Collectors;
 
 /**
  * TODO: there is some duplication between the two controllers, extract that.
- *
+ * <p>
  * TODO NOTE I'm hosting both options in the same service at the moment.
  *   This means the same model may be loaded twice.
  *   And actually that may even be true for multiple requests to the same runner. It's not running as a service
@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
  *   But we may also need to work out how to ensure that the model remains loaded and is shared across cli invocations.
  */
 @RestController
-@RequestMapping("/whisper")
+@RequestMapping("/whispers")
 public class WhisperController {
 
     /**
@@ -81,7 +81,7 @@ public class WhisperController {
      *
      */
     @PostMapping
-    public Mono<ResponseEntity<WhisperResponse>> createJob(@RequestBody WhisperRequest request) {
+    public Mono<ResponseEntity<WhisperResponse>> create(@RequestBody WhisperRequest request) {
 
         final UUID jobId = UUID.randomUUID();
 
@@ -103,7 +103,7 @@ public class WhisperController {
      * Uses hash of file content + UUID as filename, checks for duplicates.
      */
     @PostMapping("/upload")
-    public Mono<ResponseEntity<WhisperResponse>> createJobFromUpload(@ModelAttribute WhisperUploadRequest uploadRequest) {
+    public Mono<ResponseEntity<WhisperResponse>> createFromUpload(@ModelAttribute WhisperUploadRequest uploadRequest) {
 
         final UUID jobId = UUID.randomUUID();
 
@@ -131,39 +131,39 @@ public class WhisperController {
     }
 
     @GetMapping("/{jobId}")
-    public Mono<ResponseEntity<WhisperResponse>> getJob(@PathVariable String jobId) {
+    public Mono<ResponseEntity<WhisperResponse>> get(@PathVariable String jobId) {
         try {
             UUID uuid = UUID.fromString(jobId);
             return whisperJobRepository.findById(uuid)
-                .flatMap(job -> {
-                    WhisperStatus status;
-                    if ("completed".equals(job.getStatus())) {
-                        status = new CompletedStatus("completed", job.getTranscriptText());
-                    } else {
-                        status = new PendingStatus("pending");
-                    }
-                    WhisperResponse response = WhisperResponse.builder()
-                        .jobId(jobId)
-                        .status(status)
-                        .build();
-                    return Mono.just(ResponseEntity.ok(response));
-                })
-                .switchIfEmpty(Mono.just(ResponseEntity.notFound().build()));
+                    .flatMap(job -> {
+                        WhisperStatus status;
+                        if ("completed".equals(job.getStatus())) {
+                            status = new CompletedStatus("completed", job.getTranscriptText());
+                        } else {
+                            status = new PendingStatus("pending");
+                        }
+                        WhisperResponse response = WhisperResponse.builder()
+                                .jobId(jobId)
+                                .status(status)
+                                .build();
+                        return Mono.just(ResponseEntity.ok(response));
+                    })
+                    .switchIfEmpty(Mono.just(ResponseEntity.notFound().build()));
         } catch (Exception e) {
             return Mono.just(ResponseEntity.internalServerError().build());
         }
     }
 
-    @GetMapping("/jobs")
-    public Mono<ResponseEntity<WhisperCollectionResponse>> listJobs() {
+    @GetMapping("")
+    public Mono<ResponseEntity<WhisperCollectionResponse>> list() {
         return whisperJobRepository.findAll()
-            .map(job -> job.getId().toString())
-            .collectList()
-            .map(jobIds -> {
-                WhisperCollectionResponse response = new WhisperCollectionResponse(jobIds);
-                return ResponseEntity.ok(response);
-            })
-            .onErrorResume(e -> Mono.just(ResponseEntity.internalServerError().build()));
+                .map(job -> job.getId().toString())
+                .collectList()
+                .map(jobIds -> {
+                    WhisperCollectionResponse response = new WhisperCollectionResponse(jobIds);
+                    return ResponseEntity.ok(response);
+                })
+                .onErrorResume(e -> Mono.just(ResponseEntity.internalServerError().build()));
     }
 
     private static String bytesToHex(byte[] bytes) {
@@ -244,7 +244,6 @@ public class WhisperController {
     }
 
 
-
     private Mono<Void> processJobAsync(WhisperJob job, WhisperRequest request, UUID jobId) {
         return Mono.fromCallable(() -> {
                     kickOffWhisperJob(request, jobId);
@@ -256,7 +255,7 @@ public class WhisperController {
                     job.setTranscriptText(transcript);
                     return job;
                 }))
-                .flatMap(updatedJob -> whisperJobRepository.save(updatedJob))
+                .flatMap(whisperJobRepository::save)
                 .then(Mono.fromCallable(() -> {
                     Path source = Paths.get(mediaBasePath).resolve(request.getFileName());
                     Path dest = Paths.get(videoOutputBasePath).resolve(request.getFileName());
@@ -270,96 +269,89 @@ public class WhisperController {
                 });
     }
 
-       /**
-       * TODO Needs to save the output in a db with the job id
-       *   a lot of what initially went into the other service actually needs to go here.
-       *   The other service will just be handing requests off between the different models
-       *   but we need these different steps to be hosted by different services so that
-       *   they can be scaled independently
-        */
-       private void kickOffWhisperJob(final WhisperRequest request, final UUID jobId) {
-          final Process process;
-          try {
-              List<String> command = new ArrayList<>();
-              command.add("insanely-fast-whisper");
-              command.add("--file-name");
-                // TODO ensure this can't result in directory traversal.
-                // TODO ensure user has access rights to read and transcribe the video. Future task for if we ever make
-                //  this wrapper more standalone
-              command.add(Paths.get(mediaBasePath).resolve(request.getFileName()).normalize().toString());
+    private void kickOffWhisperJob(final WhisperRequest request, final UUID jobId) {
+        final Process process;
+        try {
+            List<String> command = new ArrayList<>();
+            command.add("insanely-fast-whisper");
+            command.add("--file-name");
+            // TODO ensure this can't result in directory traversal.
+            // TODO ensure user has access rights to read and transcribe the video. Future task for if we ever make
+            //  this wrapper more standalone
+            command.add(Paths.get(mediaBasePath).resolve(request.getFileName()).normalize().toString());
 
-              // TODO Not likely needed for our use case or something the client would know, or that we would want them to know
-              //if (request.getDeviceId() != null && !request.getDeviceId().isEmpty()) {
-              //    command.add("--device-id");
-              //    command.add(request.getDeviceId());
-              //}
+            // TODO Not likely needed for our use case or something the client would know, or that we would want them to know
+            //if (request.getDeviceId() != null && !request.getDeviceId().isEmpty()) {
+            //    command.add("--device-id");
+            //    command.add(request.getDeviceId());
+            //}
 
-              // Generate UUID-based transcript path relative to the configured base path
-              String transcriptPath = Paths.get(transcriptOutputBasePath).resolve(jobId.toString()).toString();
-              command.add("--transcript-path");
-              command.add(transcriptPath);
+            // Generate UUID-based transcript path relative to the configured base path
+            String transcriptPath = Paths.get(transcriptOutputBasePath).resolve(jobId.toString()).toString();
+            command.add("--transcript-path");
+            command.add(transcriptPath);
 
-             // External process should not be able to give us their hf tokens or
-             // trigger download of a model we don't already support.
-             // TODO see if we can support model selection while still banning
-             // automatic download if the model is not already available.
-             // if (request.getModelName() != null && !request.getModelName().isEmpty()) {
-             //     command.add("--model-name");
-             //     command.add(request.getModelName());
-             // }
-             if (request.getTask() != null && !request.getTask().isEmpty()) {
-                 command.add("--task");
-                 command.add(request.getTask());
-             }
-             if (request.getLanguage() != null && !request.getLanguage().isEmpty()) {
-                 command.add("--language");
-                 command.add(request.getLanguage());
-             }
-             // this is something we need to have control over
-             //if (request.getBatchSize() != null) {
-             //    command.add("--batch-size");
-             //    command.add(request.getBatchSize().toString());
-             //}
-             // TODO: Not currently installed int he env
-             //if (request.getFlash() != null && request.getFlash()) {
-             //    command.add("--flash");
-             //   command.add("True");
-             //}
-             if (request.getTimestamp() != null && !request.getTimestamp().isEmpty()) {
-                 command.add("--timestamp");
-                 command.add(request.getTimestamp());
-             }
-             // External process should not be able to give us their hf tokens or
-             // trigger download of a model we don't already support.
-             //if (request.getHfToken() != null && !request.getHfToken().isEmpty()) {
-             //    command.add("--hf-token");
-             //    command.add(request.getHfToken());
-             //}
-             // External process should not be able to give us their hf tokens or
-             // trigger download of a model we don't already support.
-             // TODO see if we can support model selection while still banning
-             // automatic download if the model is not already available.
-             //if (request.getDiarizationModel() != null && !request.getDiarizationModel().isEmpty()) {
-             //    command.add("--diarization_model");
-             //    command.add(request.getDiarizationModel());
-             //}
-             if (request.getNumSpeakers() != null) {
-                 command.add("--num-speakers");
-                 command.add(request.getNumSpeakers().toString());
-             }
-             if (request.getMinSpeakers() != null) {
-                 command.add("--min-speakers");
-                 command.add(request.getMinSpeakers().toString());
-             }
-             if (request.getMaxSpeakers() != null) {
-                 command.add("--max-speakers");
-                 command.add(request.getMaxSpeakers().toString());
-             }
+            // External process should not be able to give us their hf tokens or
+            // trigger download of a model we don't already support.
+            // TODO see if we can support model selection while still banning
+            // automatic download if the model is not already available.
+            // if (request.getModelName() != null && !request.getModelName().isEmpty()) {
+            //     command.add("--model-name");
+            //     command.add(request.getModelName());
+            // }
+            if (request.getTask() != null && !request.getTask().isEmpty()) {
+                command.add("--task");
+                command.add(request.getTask());
+            }
+            if (request.getLanguage() != null && !request.getLanguage().isEmpty()) {
+                command.add("--language");
+                command.add(request.getLanguage());
+            }
+            // this is something we need to have control over
+            //if (request.getBatchSize() != null) {
+            //    command.add("--batch-size");
+            //    command.add(request.getBatchSize().toString());
+            //}
+            // TODO: Not currently installed int he env
+            //if (request.getFlash() != null && request.getFlash()) {
+            //    command.add("--flash");
+            //   command.add("True");
+            //}
+            if (request.getTimestamp() != null && !request.getTimestamp().isEmpty()) {
+                command.add("--timestamp");
+                command.add(request.getTimestamp());
+            }
+            // External process should not be able to give us their hf tokens or
+            // trigger download of a model we don't already support.
+            //if (request.getHfToken() != null && !request.getHfToken().isEmpty()) {
+            //    command.add("--hf-token");
+            //    command.add(request.getHfToken());
+            //}
+            // External process should not be able to give us their hf tokens or
+            // trigger download of a model we don't already support.
+            // TODO see if we can support model selection while still banning
+            // automatic download if the model is not already available.
+            //if (request.getDiarizationModel() != null && !request.getDiarizationModel().isEmpty()) {
+            //    command.add("--diarization_model");
+            //    command.add(request.getDiarizationModel());
+            //}
+            if (request.getNumSpeakers() != null) {
+                command.add("--num-speakers");
+                command.add(request.getNumSpeakers().toString());
+            }
+            if (request.getMinSpeakers() != null) {
+                command.add("--min-speakers");
+                command.add(request.getMinSpeakers().toString());
+            }
+            if (request.getMaxSpeakers() != null) {
+                command.add("--max-speakers");
+                command.add(request.getMaxSpeakers().toString());
+            }
 
-             process = Runtime.getRuntime().exec(command.toArray(new String[0]));
-         } catch (IOException e) {
-             throw new RuntimeException("failed to initialize the process", e);
-         }
+            process = Runtime.getRuntime().exec(command.toArray(new String[0]));
+        } catch (IOException e) {
+            throw new RuntimeException("failed to initialize the process", e);
+        }
 
         final BufferedReader solveOutput = new BufferedReader(new InputStreamReader(process.getInputStream()));
         final BufferedReader solveErrors = new BufferedReader(new InputStreamReader(process.getErrorStream()));
@@ -404,7 +396,10 @@ public class WhisperController {
     }
 
     // Record classes for flattening reactive chains
-    private record HashAndExists(String hash, boolean exists) {}
-    private record HashAndFilename(String hash, String filename) {}
+    private record HashAndExists(String hash, boolean exists) {
+    }
+
+    private record HashAndFilename(String hash, String filename) {
+    }
 
 }
