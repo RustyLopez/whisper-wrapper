@@ -64,7 +64,7 @@ public class InsanelyFastWhisperController {
     /**
      * Base path for completed video files.
      */
-    @Value("${app.video-has-been-transcribed}")
+    @Value("${app.video-output}")
     String videoOutputBasePath;
 
     private final WhisperJobRepository whisperJobRepository;
