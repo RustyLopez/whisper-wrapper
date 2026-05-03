@@ -170,41 +170,39 @@ public class InsanelyFastWhisperController {
     }
 
     @GetMapping("/{jobId}")
-    public ResponseEntity<WhisperResponse> getJob(@PathVariable String jobId) {
+    public Mono<ResponseEntity<WhisperResponse>> getJob(@PathVariable String jobId) {
         try {
             UUID uuid = UUID.fromString(jobId);
-            WhisperJob job = whisperJobRepository.findById(uuid).block();
-            if (job == null) {
-                return ResponseEntity.notFound().build();
-            }
-            WhisperStatus status;
-            if ("completed".equals(job.getStatus())) {
-                status = new CompletedStatus("completed", job.getTranscriptText());
-            } else {
-                status = new PendingStatus("pending");
-            }
-            WhisperResponse response = WhisperResponse.builder()
-                .jobId(jobId)
-                .status(status)
-                .build();
-            return ResponseEntity.ok(response);
+            return whisperJobRepository.findById(uuid)
+                .flatMap(job -> {
+                    WhisperStatus status;
+                    if ("completed".equals(job.getStatus())) {
+                        status = new CompletedStatus("completed", job.getTranscriptText());
+                    } else {
+                        status = new PendingStatus("pending");
+                    }
+                    WhisperResponse response = WhisperResponse.builder()
+                        .jobId(jobId)
+                        .status(status)
+                        .build();
+                    return Mono.just(ResponseEntity.ok(response));
+                })
+                .switchIfEmpty(Mono.just(ResponseEntity.notFound().build()));
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().build();
+            return Mono.just(ResponseEntity.internalServerError().build());
         }
     }
 
     @GetMapping("/jobs")
-    public ResponseEntity<WhisperCollectionResponse> listJobs() {
-        try {
-            List<String> jobIds = whisperJobRepository.findAll()
-                .map(job -> job.getId().toString())
-                .collectList()
-                .block();
-            WhisperCollectionResponse response = new WhisperCollectionResponse(jobIds);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().build();
-        }
+    public Mono<ResponseEntity<WhisperCollectionResponse>> listJobs() {
+        return whisperJobRepository.findAll()
+            .map(job -> job.getId().toString())
+            .collectList()
+            .map(jobIds -> {
+                WhisperCollectionResponse response = new WhisperCollectionResponse(jobIds);
+                return ResponseEntity.ok(response);
+            })
+            .onErrorResume(e -> Mono.just(ResponseEntity.internalServerError().build()));
     }
 
     private static String bytesToHex(byte[] bytes) {
