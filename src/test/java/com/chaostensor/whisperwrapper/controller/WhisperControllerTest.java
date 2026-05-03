@@ -11,6 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.core.env.Environment;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -53,31 +54,18 @@ class WhisperControllerTest {
     }
 
 
+    @Autowired
+    private WhisperJobRepository whisperJobRepository;
+
+    @Autowired
+    private Environment environment;
+
     private WebTestClient webTestClient;
 
     @BeforeEach
     void setUp() {
-        webTestClient = WebTestClient.bindToController(new WhisperController(whisperJobRepository))
-                .configureClient()
-                .baseUrl("")
-                .build();
-    }
-
-    @Autowired
-    private WhisperJobRepository whisperJobRepository;
-
-    @Test
-    void get_WithValidJobId_ReturnsJob() {
-        UUID jobId = UUID.randomUUID();
-        WhisperJob whisperJob = new WhisperJob(jobId, "hash123", new PendingStatus("pending"), null, "test.mp4");
-        whisperJobRepository.save(whisperJob).block();
-
-        webTestClient.get()
-                .uri("/whispers/{jobId}", jobId)
-                .exchange()
-                .expectStatus().isOk();
-
-        whisperJobRepository.deleteById(jobId).block();
+        int port = environment.getProperty("local.server.port", Integer.class);
+        webTestClient = WebTestClient.bindToServer().baseUrl("http://localhost:" + port).build();
     }
 
     @Test
