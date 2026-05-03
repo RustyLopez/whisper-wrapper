@@ -136,7 +136,7 @@ public class WhisperController {
             UUID uuid = UUID.fromString(jobId);
             return whisperJobRepository.findById(uuid)
                     .flatMap(job -> {
-                        WhisperResponse response = new WhisperResponse(jobId, job.getStatus());
+                        WhisperResponse response = WhisperResponse.builder().jobId(jobId).status(job.getStatus()).build();
                         return Mono.just(ResponseEntity.ok(response));
                     })
                     .switchIfEmpty(Mono.just(ResponseEntity.notFound().build()));
