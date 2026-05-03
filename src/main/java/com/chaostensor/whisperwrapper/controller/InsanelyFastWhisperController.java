@@ -242,7 +242,7 @@ public class InsanelyFastWhisperController {
                     return (Void) null;
                 })
                 .then(Mono.fromCallable(() -> {
-                    String transcript = Files.readString(Paths.get(transcriptOutputBasePath).resolve(jobId.toString()).resolve("transcript.txt"));
+                    String transcript = Files.readString(Paths.get(transcriptOutputBasePath).resolve(jobId.toString()));
                     job.setStatus("completed");
                     job.setTranscriptText(transcript);
                     return job;
