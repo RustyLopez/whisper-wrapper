@@ -239,11 +239,10 @@ public class WhisperController {
                         .flatMap(exists -> {
                             if (exists) {
                                 return Mono.just(new HashAndFilename(hash, null));
-                            } else {
-                                String uniqueFilename = jobId.toString();
-                                return saveFile(file, uniqueFilename)
-                                        .then(Mono.just(new HashAndFilename(hash, uniqueFilename)));
                             }
+                            String uniqueFilename = jobId.toString();
+                            return saveFile(file, uniqueFilename)
+                                    .then(Mono.just(new HashAndFilename(hash, uniqueFilename)));
                         }));
     }
 
