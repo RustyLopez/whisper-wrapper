@@ -16,6 +16,8 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.test.web.servlet.client.MockMvcWebTestClient;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.test.annotation.Commit;
 import org.springframework.web.client.ApiVersionInserter;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -24,6 +26,9 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.UUID;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -110,6 +115,94 @@ class WhisperControllerTest {
     void list_OnError_ReturnsInternalServerError() {
         // This is hard to test with real repository, so skipping for now
     }
+
+    @Test
+    @Transactional
+    @Commit
+    void get_WithExistingJobId_ReturnsJob() {
+        UUID jobId = UUID.randomUUID();
+        WhisperJob job = new WhisperJob(jobId, "hash", new PendingStatus("pending"), null, "file.mp4");
+        whisperJobRepository.save(job).block();
+
+        webTestClient.get()
+                .uri("/whispers/{jobId}", jobId)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.jobId").isEqualTo(jobId.toString())
+                .jsonPath("$.status").isEqualTo("pending");
+
+        whisperJobRepository.deleteById(jobId).block();
+    }
+
+    @Test
+    void create_WithValidRequest_ReturnsJobId() throws Exception {
+        String filename = "test.mp4";
+        Path mediaPath = Paths.get("./media-input");
+        Files.createDirectories(mediaPath);
+        Path filePath = mediaPath.resolve(filename);
+        Files.write(filePath, "test content".getBytes());
+
+        WhisperRequest request = WhisperRequest.builder()
+                .fileName(filename)
+                .task("transcribe")
+                .build();
+
+        webTestClient.post()
+                .uri("/whispers")
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.jobId").exists();
+
+        Files.deleteIfExists(filePath);
+    }
+
+    @Test
+    @Transactional
+    @Commit
+    void create_WithDuplicateRequest_ReturnsError() throws Exception {
+        String filename = "duplicate.mp4";
+        Path mediaPath = Paths.get("./media-input");
+        Files.createDirectories(mediaPath);
+        Path filePath = mediaPath.resolve(filename);
+        Files.write(filePath, "duplicate content".getBytes());
+
+        // Compute hash
+        java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+        byte[] hashBytes = digest.digest("duplicate content".getBytes());
+        String hash = bytesToHex(hashBytes);
+
+        // Create existing job with same hash
+        UUID existingJobId = UUID.randomUUID();
+        WhisperJob existingJob = new WhisperJob(existingJobId, hash, new PendingStatus("pending"), null, "other.mp4");
+        whisperJobRepository.save(existingJob).block();
+
+        WhisperRequest request = WhisperRequest.builder()
+                .fileName(filename)
+                .task("transcribe")
+                .build();
+
+        webTestClient.post()
+                .uri("/whispers")
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().is5xxServerError(); // Assuming DuplicateRequestException causes 500
+
+        Files.deleteIfExists(filePath);
+        whisperJobRepository.deleteById(existingJobId).block();
+    }
+
+    private static String bytesToHex(byte[] bytes) {
+        StringBuilder result = new StringBuilder();
+        for (byte b : bytes) {
+            result.append(String.format("%02x", b));
+        }
+        return result.toString();
+    }
+
+
 
     // More tests will be added
 }
