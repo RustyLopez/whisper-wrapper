@@ -115,19 +115,7 @@ public class InsanelyFastWhisperController {
 
         MultipartFile file = uploadRequest.getFile();
 
-        return Mono.fromCallable(() -> {
-            // Compute SHA-256 hash of the file using streaming
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            try (var inputStream = file.getInputStream()) {
-                byte[] buffer = new byte[8192];
-                int bytesRead;
-                while ((bytesRead = inputStream.read(buffer)) != -1) {
-                    digest.update(buffer, 0, bytesRead);
-                }
-            }
-            byte[] hashBytes = digest.digest();
-            return bytesToHex(hashBytes);
-        })
+        return computeFileHash(file)
         .<ResponseEntity<WhisperResponse>>flatMap(hash -> {
             Path mediaPath = Paths.get(mediaBasePath);
             return Mono.fromCallable(() -> {
@@ -242,6 +230,22 @@ public class InsanelyFastWhisperController {
             return bytesToHex(hashBytes);
         });
     }
+
+    private Mono<String> computeFileHash(MultipartFile file) {
+        return Mono.fromCallable(() -> {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            try (var inputStream = file.getInputStream()) {
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    digest.update(buffer, 0, bytesRead);
+                }
+            }
+            byte[] hashBytes = digest.digest();
+            return bytesToHex(hashBytes);
+        });
+    }
+
 
 
     private Mono<Void> processJobAsync(WhisperJob job, WhisperRequest request, UUID jobId) {
