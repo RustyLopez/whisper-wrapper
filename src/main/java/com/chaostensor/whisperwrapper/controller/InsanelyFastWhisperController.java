@@ -88,37 +88,38 @@ public class InsanelyFastWhisperController {
 
         // Save job to DB
         WhisperJob job = new WhisperJob(jobId, null, "pending", null, request.getFileName());
-        whisperJobRepository.save(job).block(); // sync save
 
         // Kick off the whisper job asynchronously
-        Mono.fromRunnable(() -> {
-            try {
-                kickOffWhisperJob(request, jobId);
-                // On success, update DB and move file
-                String transcript = Files.readString(Paths.get(transcriptOutputBasePath).resolve(jobId.toString()).resolve("transcript.txt"));
-                job.setStatus("completed");
-                job.setTranscriptText(transcript);
-                whisperJobRepository.save(job).block();
+        return whisperJobRepository.save(job)
+                        .then(Mono.fromRunnable(() -> {
+                            try {
+                                kickOffWhisperJob(request, jobId);
+                                // On success, update DB and move file
+                                String transcript = Files.readString(Paths.get(transcriptOutputBasePath).resolve(jobId.toString()).resolve("transcript.txt"));
+                                job.setStatus("completed");
+                                job.setTranscriptText(transcript);
+                                whisperJobRepository.save(job).block();
 
-                // Move video to output dir
-                Path source = Paths.get(mediaBasePath).resolve(request.getFileName());
-                Path dest = Paths.get(videoOutputBasePath).resolve(request.getFileName());
-                Files.createDirectories(dest.getParent());
-                Files.move(source, dest);
+                                // Move video to output dir
+                                Path source = Paths.get(mediaBasePath).resolve(request.getFileName());
+                                Path dest = Paths.get(videoOutputBasePath).resolve(request.getFileName());
+                                Files.createDirectories(dest.getParent());
+                                Files.move(source, dest);
 
-            } catch (Exception e) {
-                // On failure, update status to failed
-                job.setStatus("failed");
-                whisperJobRepository.save(job).block();
-            }
-        }).subscribeOn(Schedulers.boundedElastic()).subscribe();
-
-        return Mono.just(
-                ResponseEntity.ok(
+                            } catch (Exception e) {
+                                // On failure, update status to failed
+                                job.setStatus("failed");
+                                whisperJobRepository.save(job).block();
+                            }
+                            /*
+                             * TODO on error or on timeout, write either result. We'll want an admin ui to be able to retry those.
+                             */
+                        }))
+                .thenReturn(ResponseEntity.ok(
                         WhisperResponse.builder()
                                 .jobId(jobId.toString()).build()
-                )
-        );
+                ));
+
 
     }
 
@@ -236,7 +237,6 @@ public class InsanelyFastWhisperController {
             WhisperResponse response = WhisperResponse.builder()
                 .jobId(jobId)
                 .status(status)
-                .videoPath(job.getVideoPath())
                 .build();
             return ResponseEntity.ok(response);
         } catch (Exception e) {
