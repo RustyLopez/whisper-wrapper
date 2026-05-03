@@ -25,7 +25,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -106,7 +105,7 @@ public class InsanelyFastWhisperController {
      * Uses hash of file content + UUID as filename, checks for duplicates.
      */
     @PostMapping("/upload")
-    public Mono<ResponseEntity<?>> createJobFromUpload(@ModelAttribute WhisperUploadRequest uploadRequest) {
+    public Mono<ResponseEntity<WhisperResponse>> createJobFromUpload(@ModelAttribute WhisperUploadRequest uploadRequest) {
 
         final UUID jobId = UUID.randomUUID();
 
@@ -125,7 +124,7 @@ public class InsanelyFastWhisperController {
             byte[] hashBytes = digest.digest();
             return bytesToHex(hashBytes);
         }).subscribeOn(Schedulers.boundedElastic())
-        .flatMap(hash -> {
+        .<ResponseEntity<WhisperResponse>>flatMap(hash -> {
             Path mediaPath = Paths.get(mediaBasePath);
             return Mono.fromCallable(() -> {
                 Files.createDirectories(mediaPath); // ensure directory exists
@@ -135,7 +134,7 @@ public class InsanelyFastWhisperController {
             }).subscribeOn(Schedulers.boundedElastic())
             .flatMap(isDuplicate -> {
                 if (isDuplicate) {
-                    return Mono.just((ResponseEntity<?>) ResponseEntity.badRequest().build());
+                    return Mono.error(DuplicateRequestException::new);
                 }
 
                 // Generate filename: UUID only (ignore provided name)
@@ -147,7 +146,7 @@ public class InsanelyFastWhisperController {
                     Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
                     return uniqueFilename;
                 }).subscribeOn(Schedulers.boundedElastic())
-                .flatMap(filename -> {
+                .<ResponseEntity<WhisperResponse>>flatMap(filename -> {
                     // Save job to DB
                     WhisperJob job = new WhisperJob(jobId, hash, "pending", null, filename);
                     return whisperJobRepository.save(job)
@@ -166,15 +165,14 @@ public class InsanelyFastWhisperController {
                             // Kick off the whisper job asynchronously
                             processJobAsync(savedJob, request, jobId).subscribe();
 
-                            return (Mono<ResponseEntity<?>>) Mono.just(ResponseEntity.ok(
+                            return Mono.just(ResponseEntity.<WhisperResponse>ok(
                                     WhisperResponse.builder()
                                             .jobId(jobId.toString()).build()
                             ));
                         });
                 });
             });
-        })
-        .onErrorResume(e -> Mono.just(ResponseEntity.internalServerError().build()));
+        });
     }
 
     @GetMapping("/{jobId}")
