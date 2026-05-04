@@ -161,9 +161,6 @@ class WhisperControllerTest {
                 .task("transcribe")
                 .build();
 
-        // Mock repository
-        when(whisperJobRepository.findByHash(anyString())).thenReturn(Mono.empty());
-        when(whisperJobRepository.save(any(WhisperJob.class))).thenReturn(Mono.just(new WhisperJob(UUID.randomUUID(), "hash", new PendingStatus("pending"), null, filename)));
         // Mock process service
         when(processService.executeCommand(anyList())).thenReturn(Mono.empty());
 
