@@ -116,8 +116,8 @@ class WhisperControllerTest {
     void list_ReturnsJobIds() {
         UUID jobId1 = UUID.randomUUID();
         UUID jobId2 = UUID.randomUUID();
-        WhisperJob job1 = new WhisperJob(jobId1, "hash1", new PendingStatus("pending"), null, "file1.mp4");
-        WhisperJob job2 = new WhisperJob(jobId2, "hash2", new PendingStatus("pending"), null, "file2.mp4");
+        WhisperJob job1 = new WhisperJob(jobId1, "hash1", new PendingStatus(), null, "file1.mp4");
+        WhisperJob job2 = new WhisperJob(jobId2, "hash2", new PendingStatus(), null, "file2.mp4");
         whisperJobRepository.save(job1).block();
         whisperJobRepository.save(job2).block();
 
@@ -138,7 +138,7 @@ class WhisperControllerTest {
     @Test
     void get_WithExistingJobId_ReturnsJob() {
 
-        WhisperJob job = new WhisperJob(null/* else it will not be detected as new */, "hash", new PendingStatus("pending"), null, "file.mp4");
+        WhisperJob job = new WhisperJob(null/* else it will not be detected as new */, "hash", new PendingStatus(), null, "file.mp4");
         job = whisperJobRepository.save(job).block();
 
         final UUID jobId = Objects.requireNonNull(job).getId();
@@ -230,7 +230,7 @@ class WhisperControllerTest {
         String hash = bytesToHex(hashBytes);
 
 
-        WhisperJob existingJob = new WhisperJob(null, hash, new PendingStatus("pending"), null, "other.mp4");
+        WhisperJob existingJob = new WhisperJob(null, hash, new PendingStatus(), null, "other.mp4");
         whisperJobRepository.save(existingJob).block();
 
         WhisperRequest request = WhisperRequest.builder()
