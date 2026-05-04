@@ -4,9 +4,9 @@
 
 ## Overview
 
-This is a Java Spring Boot WebFlux application that provides a REST API wrapper around WhisperX (and/or insanely-fast-whisper). It enables asynchronous audio/video transcription with advanced features like diarization, alignment, and speaker identification. The wrapper uses Docker for containerization and integrates with PostgreSQL (with pgvector extension) for job persistence and vector storage.
+This is a Java Spring Boot WebFlux application that provides a REST API wrapper around WhisperX. It enables asynchronous audio/video transcription with advanced features like diarization, alignment, and speaker identification. The wrapper uses Docker for containerization and integrates with PostgreSQL (with pgvector extension, though that's not yet put to use.) for job persistence and vector storage.
 
-The application processes media files by invoking the WhisperX CLI tool asynchronously, handles job statuses, and outputs transcripts in SRT format. It's designed for internal use in clustered environments, assuming shared volume access for media files rather than direct uploads for large files. It prevents duplicate processing via SHA-256 hashing and supports GPU acceleration via CUDA or MPS.
+The application processes media files by invoking the WhisperX CLI tool asynchronously, handles job statuses, and outputs transcripts in any format WhisperX supports. It's intended for internal or localhost use only at this stage, can operate assuming a shared volume between the caller and the service for large media files rather than relying on direct uploads. It prevents duplicate processing via SHA-256 hashing and supports GPU acceleration via CUDA or MPS.
 
 ## Features
 
@@ -21,10 +21,10 @@ The application processes media files by invoking the WhisperX CLI tool asynchro
 
 ## Prerequisites
 
-- Java 17+
+- Java 21+
 - Maven
 - Docker and Docker Compose
-- WhisperX CLI installed in the container environment
+- WhisperX CLI will be installed in the container environment via the Dockerfile
 - PostgreSQL with pgvector extension
 
 ## Quick Start
@@ -45,7 +45,7 @@ The application processes media files by invoking the WhisperX CLI tool asynchro
    docker-compose up
    ```
 
-The API will be available at `http://localhost:8070`.
+The API will be available at `http://localhost:8070/swagger-ui.html`.
 
 ## API Usage
 
@@ -154,14 +154,6 @@ Configure the application using these environment variables (set in `docker-comp
 - `app.whisperx.device-index`: GPU device index (for CUDA)
 - `app.whisperx.print-progress`: Enable progress printing (Boolean)
 
-### Database
-- `SPRING_VECTOR_DB_POSTGRES_DATASOURCE_URL`: Vector DB URL
-- `SPRING_VECTOR_DB_POSTGRES_DATASOURCE_USERNAME`: Vector DB username
-- `SPRING_VECTOR_DB_POSTGRES_DATASOURCE_PASSWORD`: Vector DB password
-- `SPRING_R2DBC_DATASOURCE_URL`: Reactive DB URL
-- `SPRING_R2DBC_DATASOURCE_USERNAME`: Reactive DB username
-- `SPRING_R2DBC_DATASOURCE_PASSWORD`: Reactive DB password
-
 ## Example Usage
 
 Upload a file and transcribe:
@@ -171,7 +163,7 @@ curl -X POST -F "file=@audio.wav" -F "model=large-v3" -F "diarize=true" http://l
 
 Check status:
 ```bash
-curl http://localhost:8070/whispers/123e4567-e89b-12d3-a456-426614174000
+curl http://localhost:8070/whispers/<job id>
 ```
 
 Transcripts are saved in the `transcript-output` directory, and processed videos in `video-output`.
@@ -179,6 +171,6 @@ Transcripts are saved in the `transcript-output` directory, and processed videos
 ## Notes
 
 - Diarization is disabled by default due to model access restrictions.
-- HF tokens are not exposed for security reasons.
+- HF tokens are not currently supported and won't be until I can work out a good security solution for those. This means you'll need to run an hf download into the mounted models directory to add new models that require an HF Token.
 - Designed for internal, secure environments; no additional ACLs for file access.
-- Future improvements: Support model selection without auto-download, configurable output formats, shared model loading.
+- This is being built in combination with a Wiki generator , which will hopefully be following suit very soon.  The goal of that related project is to be able to drop a bunch of videos with notes in a dir and get a wiki out the other side.
