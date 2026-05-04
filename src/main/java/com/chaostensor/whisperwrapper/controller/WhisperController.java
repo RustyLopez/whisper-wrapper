@@ -372,10 +372,7 @@ public class WhisperController {
 
 
     private Mono<Void> processJobAsync(WhisperJob job, WhisperRequest request, UUID jobId) {
-        return Mono.fromCallable(() -> {
-                    kickOffWhisperJob(request, jobId);
-                    return (Void) null;
-                })
+        return kickOffWhisperJob(request, jobId)
                 .then(Mono.fromCallable(() -> {
                     // WhisperX creates multiple output files in a jobId-specific directory
                     // We want to read the .srt file which has the original filename with .srt extension
@@ -407,9 +404,10 @@ public class WhisperController {
                 });
     }
 
-    private void kickOffWhisperJob(final WhisperRequest request, final UUID jobId) {
-        final Process process;
-        try {
+    private Mono<Void> kickOffWhisperJob(final WhisperRequest request, final UUID jobId) {
+        return Mono.fromCallable(() -> {
+            final Process process;
+            try {
             List<String> command = new ArrayList<>();
             command.add("whisperx");
 
@@ -592,9 +590,11 @@ public class WhisperController {
         } catch (ExecutionException | InterruptedException e) {
             throw new RuntimeException("WhisperX process error: " + solveErrors.lines().collect(Collectors.joining()), e);
         }
-        if (process.exitValue() != 0) {
-            throw new RuntimeException("WhisperX process failed: " + solveErrors.lines().collect(Collectors.joining()));
-        }
+            if (process.exitValue() != 0) {
+                throw new RuntimeException("WhisperX process failed: " + solveErrors.lines().collect(Collectors.joining()));
+            }
+            return null;
+        });
     }
 
     // Record classes for flattening reactive chains

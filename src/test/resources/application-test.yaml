@@ -17,3 +17,13 @@ app:
   media-input: ${MEDIA_INPUT:./media-input} # TODO use an env var with a fallback to the process working dir / media
   transcript-output: ${TRANSCRIPT_OUTPUT:./transcript-output} # TODO use an env var with a fallback to the process working dir / media
   video-output: ${VIDEO_OUTPUT:./video-output}
+  whisperx:
+    default-model: "tiny"
+    batch-size: 16
+    compute-type: "int8"
+    default-align-model: ""
+    default-vad-method: "pyannote_vad"
+    default-output-format: "srt"
+    device: "cpu"
+    device-index: 0
+    print-progress: false
