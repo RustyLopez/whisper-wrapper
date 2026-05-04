@@ -1,5 +1,6 @@
-package com.chaostensor.whisperwrapper.dto;
+package com.chaostensor.whisperwrapper.controller;
 
+import com.chaostensor.whisperwrapper.dto.WhisperStatus;
 import com.fasterxml.jackson.annotation.JsonTypeName;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -12,8 +13,5 @@ import lombok.extern.jackson.Jacksonized;
 @AllArgsConstructor
 @Accessors(fluent = true)
 @Builder
-public class CompletedStatus implements WhisperStatus {
-
-    String transcriptData;
-
+public class FailedStatus implements WhisperStatus {
 }

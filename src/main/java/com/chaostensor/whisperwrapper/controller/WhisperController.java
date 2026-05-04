@@ -346,7 +346,7 @@ public class WhisperController {
     }
 
     private Mono<WhisperJob> createJob(String hash, String filename) {
-        WhisperJob job = new WhisperJob(null, hash, new PendingStatus("pending"), null, filename);
+        WhisperJob job = new WhisperJob(null, hash, new PendingStatus(), null, filename);
         return whisperJobRepository.save(job);
     }
 
@@ -397,7 +397,7 @@ public class WhisperController {
 
                     // Read the .srt file content
                     String transcript = Files.readString(srtFilePath);
-                    job.setStatus(new CompletedStatus("completed", transcript));
+                    job.setStatus(new CompletedStatus(transcript));
                     job.setTranscriptText(transcript);
                     return job;
                 }))
@@ -411,7 +411,7 @@ public class WhisperController {
                 }))
                 .doOnError(e -> {
                     log.error("failed to generate transcript", e);
-                    job.setStatus(new PendingStatus("failed"));
+                    job.setStatus(new FailedStatus());
                     whisperJobRepository.save(job).subscribe(); // fire and forget
                 });
     }

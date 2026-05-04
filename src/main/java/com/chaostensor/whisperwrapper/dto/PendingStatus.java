@@ -11,7 +11,6 @@ import lombok.extern.jackson.Jacksonized;
 @Value
 @AllArgsConstructor
 @Accessors(fluent = true)
-@JsonTypeName("pending")
 @Builder
 public class PendingStatus implements WhisperStatus {
 
