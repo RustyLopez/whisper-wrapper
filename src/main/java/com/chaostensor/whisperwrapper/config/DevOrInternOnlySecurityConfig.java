@@ -32,7 +32,8 @@ public class DevOrInternOnlySecurityConfig {
     @Bean
     public SecurityWebFilterChain filterChain(ServerHttpSecurity http) throws Exception {
         log.warn("This configuration is only intended for dev or localhost envs. Please setup auth if using in production.");
-        http.authorizeExchange(auth -> auth.anyExchange().permitAll());
+        http.csrf(ServerHttpSecurity.CsrfSpec::disable)
+                .authorizeExchange(auth -> auth.anyExchange().permitAll());
         return http.build();
     }
 }
