@@ -166,6 +166,10 @@ public class WhisperController {
         })
                 .doOnError(e -> {
                     log.error("create error", e);
+                })
+                .onErrorResume(e -> {
+                    log.error("Error in create job", e);
+                    return Mono.just(ResponseEntity.internalServerError().build());
                 });
 
 
@@ -253,6 +257,11 @@ public class WhisperController {
                             .build();
 
                     return createAndStartJob(jobId, hashAndFilename.hash(), hashAndFilename.filename(), request);
+                })
+                .doOnError(e -> log.error("Error in createFromUpload", e))
+                .onErrorResume(e -> {
+                    log.error("Error in create from upload", e);
+                    return Mono.just(ResponseEntity.internalServerError().build());
                 });
     }
 
@@ -261,12 +270,18 @@ public class WhisperController {
         try {
             UUID uuid = UUID.fromString(jobId);
             return whisperJobRepository.findById(uuid)
+                    .doOnError(e -> log.error("Error retrieving job {}", jobId, e))
                     .flatMap(job -> {
                         WhisperResponse response = WhisperResponse.builder().jobId(jobId).status(job.getStatus()).build();
                         return Mono.just(ResponseEntity.ok(response));
                     })
-                    .switchIfEmpty(Mono.just(ResponseEntity.notFound().build()));
+                    .switchIfEmpty(Mono.just(ResponseEntity.notFound().build()))
+                    .onErrorResume(e -> {
+                        log.error("Error in get job {}", jobId, e);
+                        return Mono.just(ResponseEntity.internalServerError().build());
+                    });
         } catch (Exception e) {
+            log.error("Invalid job id {}", jobId, e);
             return Mono.just(ResponseEntity.internalServerError().build());
         }
     }
@@ -280,6 +295,7 @@ public class WhisperController {
                     WhisperCollectionResponse response = new WhisperCollectionResponse(jobIds);
                     return ResponseEntity.ok(response);
                 })
+                .doOnError(e -> log.error("Error retrieving job list", e))
                 .onErrorResume(e -> Mono.just(ResponseEntity.internalServerError().build()));
     }
 
