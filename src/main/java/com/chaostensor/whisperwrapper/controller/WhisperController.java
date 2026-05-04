@@ -155,8 +155,6 @@ public class WhisperController {
 
 
         return request.flatMap(whisperRequest -> {
-            final UUID jobId = UUID.randomUUID();
-
             Path filePath = Paths.get(mediaBasePath).resolve(whisperRequest.getFileName());
 
             return computeHashAndCheckExists(filePath)
@@ -164,7 +162,7 @@ public class WhisperController {
                         if (hashAndExists.exists()) {
                             return Mono.error(new DuplicateRequestException());
                         }
-                        return createAndStartJob(jobId, hashAndExists.hash(), whisperRequest.getFileName(), whisperRequest);
+                        return createAndStartJob(hashAndExists.hash(), whisperRequest.getFileName(), whisperRequest);
                     });
         })
                 .doOnError(e -> {
@@ -185,27 +183,25 @@ public class WhisperController {
      */
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Mono<ResponseEntity<WhisperResponse>> createFromUpload(@RequestPart("file") MultipartFile file,
-                                                                   @RequestPart(value = "task", required = false) String task,
-                                                                   @RequestPart(value = "language", required = false) String language,
-                                                                   @RequestPart(value = "timestamp", required = false) String timestamp,
-                                                                   @RequestPart(value = "numSpeakers", required = false) Integer numSpeakers,
-                                                                   @RequestPart(value = "minSpeakers", required = false) Integer minSpeakers,
-                                                                   @RequestPart(value = "maxSpeakers", required = false) Integer maxSpeakers,
-                                                                   @RequestPart(value = "model", required = false) String model,
-                                                                   @RequestPart(value = "outputFormat", required = false) String outputFormat,
-                                                                   @RequestPart(value = "diarize", required = false) Boolean diarize,
-                                                                   @RequestPart(value = "alignModel", required = false) String alignModel,
-                                                                   @RequestPart(value = "vadMethod", required = false) String vadMethod,
-                                                                   @RequestPart(value = "vadOnset", required = false) Float vadOnset,
-                                                                   @RequestPart(value = "vadOffset", required = false) Float vadOffset,
-                                                                   @RequestPart(value = "chunkSize", required = false) Integer chunkSize,
-                                                                   @RequestPart(value = "diarizeModel", required = false) String diarizeModel,
-                                                                   @RequestPart(value = "temperature", required = false) Float temperature,
-                                                                   @RequestPart(value = "beamSize", required = false) Integer beamSize,
-                                                                   @RequestPart(value = "highlightWords", required = false) Boolean highlightWords,
-                                                                   @RequestPart(value = "hotwords", required = false) String hotwords) {
-
-        final UUID jobId = UUID.randomUUID();
+                                                                    @RequestPart(value = "task", required = false) String task,
+                                                                    @RequestPart(value = "language", required = false) String language,
+                                                                    @RequestPart(value = "timestamp", required = false) String timestamp,
+                                                                    @RequestPart(value = "numSpeakers", required = false) Integer numSpeakers,
+                                                                    @RequestPart(value = "minSpeakers", required = false) Integer minSpeakers,
+                                                                    @RequestPart(value = "maxSpeakers", required = false) Integer maxSpeakers,
+                                                                    @RequestPart(value = "model", required = false) String model,
+                                                                    @RequestPart(value = "outputFormat", required = false) String outputFormat,
+                                                                    @RequestPart(value = "diarize", required = false) Boolean diarize,
+                                                                    @RequestPart(value = "alignModel", required = false) String alignModel,
+                                                                    @RequestPart(value = "vadMethod", required = false) String vadMethod,
+                                                                    @RequestPart(value = "vadOnset", required = false) Float vadOnset,
+                                                                    @RequestPart(value = "vadOffset", required = false) Float vadOffset,
+                                                                    @RequestPart(value = "chunkSize", required = false) Integer chunkSize,
+                                                                    @RequestPart(value = "diarizeModel", required = false) String diarizeModel,
+                                                                    @RequestPart(value = "temperature", required = false) Float temperature,
+                                                                    @RequestPart(value = "beamSize", required = false) Integer beamSize,
+                                                                    @RequestPart(value = "highlightWords", required = false) Boolean highlightWords,
+                                                                    @RequestPart(value = "hotwords", required = false) String hotwords) {
 
         WhisperUploadRequest uploadRequest = WhisperUploadRequest.builder()
                 .file(file)
@@ -230,15 +226,25 @@ public class WhisperController {
                 .hotwords(hotwords)
                 .build();
 
-        return computeHashCheckExistsAndSaveFile(file, jobId)
-                .flatMap(hashAndFilename -> {
-                    if (hashAndFilename.filename() == null) {
+        return computeHashAndCheckExists(file)
+                .flatMap(hashAndExists -> {
+                    if (hashAndExists.exists()) {
                         return Mono.error(new DuplicateRequestException());
                     }
-
-                    // Create WhisperRequest with the saved file path (relative to mediaBasePath)
+                    return createJob(hashAndExists.hash(), null)
+                            .flatMap(savedJob -> {
+                                String filename = savedJob.getId().toString();
+                                return saveFile(file, filename)
+                                        .then(Mono.fromCallable(() -> {
+                                            savedJob.setVideoPath(filename);
+                                            return savedJob;
+                                        }))
+                                        .flatMap(whisperJobRepository::save);
+                            });
+                })
+                .flatMap(savedJob -> {
                     WhisperRequest request = WhisperRequest.builder()
-                            .fileName(hashAndFilename.filename())
+                            .fileName(savedJob.getVideoPath())
                             .task(uploadRequest.getTask())
                             .language(uploadRequest.getLanguage())
                             .timestamp(uploadRequest.getTimestamp())
@@ -258,8 +264,11 @@ public class WhisperController {
                             .highlightWords(uploadRequest.getHighlightWords())
                             .hotwords(uploadRequest.getHotwords())
                             .build();
-
-                    return createAndStartJob(jobId, hashAndFilename.hash(), hashAndFilename.filename(), request);
+                    startJob(savedJob, request);
+                    return Mono.just(ResponseEntity.ok(
+                            WhisperResponse.builder()
+                                    .jobId(savedJob.getId().toString()).build()
+                    ));
                 })
                 .doOnError(e -> log.error("Error in createFromUpload", e))
                 .onErrorResume(e -> {
@@ -354,13 +363,13 @@ public class WhisperController {
         });
     }
 
-    private Mono<WhisperJob> createJob(UUID jobId, String hash, String filename) {
-        WhisperJob job = new WhisperJob(jobId, hash, new PendingStatus("pending"), null, filename);
+    private Mono<WhisperJob> createJob(String hash, String filename) {
+        WhisperJob job = new WhisperJob(null, hash, new PendingStatus("pending"), null, filename);
         return whisperJobRepository.save(job);
     }
 
     private void startJob(WhisperJob job, WhisperRequest request) {
-        processJobAsync(job, request, job.getId()).subscribe();
+        processJobAsync(job, request).subscribe();
     }
 
     private Mono<HashAndExists> computeHashAndCheckExists(Path filePath) {
@@ -369,33 +378,28 @@ public class WhisperController {
                         .map(exists -> new HashAndExists(hash, exists)));
     }
 
-    private Mono<HashAndFilename> computeHashCheckExistsAndSaveFile(MultipartFile file, UUID jobId) {
+    private Mono<HashAndExists> computeHashAndCheckExists(MultipartFile file) {
         return computeFileHash(file)
-                .flatMap(hash -> whisperJobRepository.findByHash(hash)
-                        .flatMap(job -> Mono.just(new HashAndFilename(hash, job.getVideoPath())))
-                        .switchIfEmpty(Mono.defer(() -> {
-                            String uniqueFilename = jobId.toString();
-                            return saveFile(file, uniqueFilename)
-                                    .then(Mono.just(new HashAndFilename(hash, uniqueFilename)));
-                        })));
+                .flatMap(hash -> checkHashExists(hash)
+                        .map(exists -> new HashAndExists(hash, exists)));
     }
 
-    private Mono<ResponseEntity<WhisperResponse>> createAndStartJob(UUID jobId, String hash, String filename, WhisperRequest request) {
-        return createJob(jobId, hash, filename)
+    private Mono<ResponseEntity<WhisperResponse>> createAndStartJob(String hash, String filename, WhisperRequest request) {
+        return createJob(hash, filename)
                 .doOnSuccess(job -> startJob(job, request))
-                .thenReturn(ResponseEntity.ok(
+                .map(job -> ResponseEntity.ok(
                         WhisperResponse.builder()
-                                .jobId(jobId.toString()).build()
+                                .jobId(job.getId().toString()).build()
                 ));
     }
 
 
-    private Mono<Void> processJobAsync(WhisperJob job, WhisperRequest request, UUID jobId) {
-        return kickOffWhisperJob(request, jobId)
+    private Mono<Void> processJobAsync(WhisperJob job, WhisperRequest request) {
+        return kickOffWhisperJob(request, job.getId())
                 .then(Mono.fromCallable(() -> {
                     // WhisperX creates multiple output files in a jobId-specific directory
                     // We want to read the .srt file which has the original filename with .srt extension
-                    Path outputDir = Paths.get(transcriptOutputBasePath).resolve(jobId.toString());
+                    Path outputDir = Paths.get(transcriptOutputBasePath).resolve(job.getId().toString());
                     String originalFilename = request.getFileName();
                     // Remove extension from original filename and add .srt
                     String srtFilename = originalFilename.contains(".")
@@ -593,9 +597,6 @@ public class WhisperController {
 
     // Record classes for flattening reactive chains
     private record HashAndExists(String hash, boolean exists) {
-    }
-
-    private record HashAndFilename(String hash, String filename) {
     }
 
 }
