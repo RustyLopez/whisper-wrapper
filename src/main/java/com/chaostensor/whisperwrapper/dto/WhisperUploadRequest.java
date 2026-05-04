@@ -45,4 +45,79 @@ public class WhisperUploadRequest {
      * Defines the maximum number of speakers that the system should consider in diarization. Must be at least 1. Cannot be used together with numSpeakers.
      */
     Integer maxSpeakers;
+
+    /**
+     * Name of the Whisper model to use (e.g., "small", "base", "medium", "large-v2", "large-v3"). Default: "small"
+     */
+    String model;
+
+    /**
+     * Format of the output file. Options: "all", "srt", "vtt", "txt", "tsv", "json", "aud". Default: "all"
+     */
+    String outputFormat;
+
+    /**
+     * Apply diarization to assign speaker labels to each segment/word. Default: false
+     */
+    Boolean diarize;
+
+    /**
+     * Name of phoneme-level ASR model to do alignment. Default: null (auto-selected based on language)
+     */
+    String alignModel;
+
+    /**
+     * VAD method to be used: "pyannote" or "silero". Default: "pyannote"
+     */
+    String vadMethod;
+
+    /**
+     * The preferred batch size for inference. Default: 8
+     */
+    Integer batchSize;
+
+    /**
+     * Compute type for computation: "default", "float16", "float32", "int8". Default: "default"
+     */
+    String computeType;
+
+    /**
+     * Onset threshold for VAD (see pyannote.audio), reduce this if speech is not being detected. Default: 0.500
+     */
+    Float vadOnset;
+
+    /**
+     * Offset threshold for VAD (see pyannote.audio), reduce this if speech is not being detected. Default: 0.363
+     */
+    Float vadOffset;
+
+    /**
+     * Chunk size for merging VAD segments. Default: 30, reduce this if the chunk is too long.
+     */
+    Integer chunkSize;
+
+    /**
+     * Name of the speaker diarization model to use. Default: "pyannote/speaker-diarization-community-1"
+     */
+    String diarizeModel;
+
+    /**
+     * Temperature to use for sampling. Default: 0
+     */
+    Float temperature;
+
+    /**
+     * Number of beams in beam search, only applicable when temperature is zero. Default: 5
+     */
+    Integer beamSize;
+
+    /**
+     * Whether to underline each word as it is spoken in srt and vtt output. Default: false
+     */
+    Boolean highlightWords;
+
+    /**
+     * Hotwords/hint phrases to the model (e.g. "WhisperX, PyAnnote, GPU"); improves recognition of rare/technical terms
+     */
+    String hotwords;
 }

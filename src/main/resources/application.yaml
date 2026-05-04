@@ -34,3 +34,26 @@ app:
   media-input: ${MEDIA_INPUT:./media-input} # TODO use an env var with a fallback to the process working dir / media
   transcript-output: ${TRANSCRIPT_OUTPUT:./transcript-output} # TODO use an env var with a fallback to the process working dir / media
   video-output: ${VIDEO_OUTPUT:./video-output}
+
+  # WhisperX configuration - app level settings that are not user configurable
+  whisperx:
+    # Default model to use if not specified by user
+    default-model: ${WHISPERX_DEFAULT_MODEL:large-v2}
+    # Default batch size for inference
+    default-batch-size: ${WHISPERX_DEFAULT_BATCH_SIZE:8}
+    # Default compute type for computation
+    default-compute-type: ${WHISPERX_DEFAULT_COMPUTE_TYPE:default}
+    # Default alignment model (auto-selected if null)
+    default-align-model: ${WHISPERX_DEFAULT_ALIGN_MODEL:}
+    # Default VAD method
+    default-vad-method: ${WHISPERX_DEFAULT_VAD_METHOD:pyannote}
+    # Default output format
+    default-output-format: ${WHISPERX_DEFAULT_OUTPUT_FORMAT:all}
+    # Device to use for inference
+    device: ${WHISPERX_DEVICE:cuda}
+    # Device index for FasterWhisper inference
+    device-index: ${WHISPERX_DEVICE_INDEX:0}
+    # Whether to print progress during transcription
+    print-progress: ${WHISPERX_PRINT_PROGRESS:false}
+    # HuggingFace token for accessing gated models (diarization)
+    hf-token: ${WHISPERX_HF_TOKEN:}

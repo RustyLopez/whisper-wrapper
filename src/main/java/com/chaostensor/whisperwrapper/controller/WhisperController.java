@@ -71,6 +71,67 @@ public class WhisperController {
     @Value("${app.video-output}")
     String videoOutputBasePath;
 
+    // WhisperX configuration properties
+    /**
+     * Default Whisper model to use if not specified by user.
+     */
+    @Value("${app.whisperx.default-model}")
+    String defaultModel;
+
+    /**
+     * Default batch size for inference.
+     */
+    @Value("${app.whisperx.default-batch-size}")
+    Integer defaultBatchSize;
+
+    /**
+     * Default compute type for computation.
+     */
+    @Value("${app.whisperx.default-compute-type}")
+    String defaultComputeType;
+
+    /**
+     * Default alignment model (auto-selected if empty).
+     */
+    @Value("${app.whisperx.default-align-model:}")
+    String defaultAlignModel;
+
+    /**
+     * Default VAD method.
+     */
+    @Value("${app.whisperx.default-vad-method}")
+    String defaultVadMethod;
+
+    /**
+     * Default output format.
+     */
+    @Value("${app.whisperx.default-output-format}")
+    String defaultOutputFormat;
+
+    /**
+     * Device to use for inference.
+     */
+    @Value("${app.whisperx.device}")
+    String device;
+
+    /**
+     * Device index for FasterWhisper inference.
+     */
+    @Value("${app.whisperx.device-index}")
+    Integer deviceIndex;
+
+    /**
+     * Whether to print progress during transcription.
+     */
+    @Value("${app.whisperx.print-progress}")
+    Boolean printProgress;
+
+    /**
+     * HuggingFace token for accessing gated models (diarization).
+     */
+    @Value("${app.whisperx.hf-token:}")
+    String hfToken;
+
     private final WhisperJobRepository whisperJobRepository;
 
 
@@ -114,14 +175,29 @@ public class WhisperController {
      * Saves the uploaded file to mediaBasePath and kicks off the whisper job.
      * Uses hash of file content + UUID as filename, checks for duplicates.
      */
-    @PostMapping(value = "/upload", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Mono<ResponseEntity<WhisperResponse>> createFromUpload(@RequestPart("file") MultipartFile file,
-                                                                  @RequestPart(value = "task", required = false) String task,
-                                                                  @RequestPart(value = "language", required = false) String language,
-                                                                  @RequestPart(value = "timestamp", required = false) String timestamp,
-                                                                  @RequestPart(value = "numSpeakers", required = false) Integer numSpeakers,
-                                                                  @RequestPart(value = "minSpeakers", required = false) Integer minSpeakers,
-                                                                  @RequestPart(value = "maxSpeakers", required = false) Integer maxSpeakers) {
+                                                                   @RequestPart(value = "task", required = false) String task,
+                                                                   @RequestPart(value = "language", required = false) String language,
+                                                                   @RequestPart(value = "timestamp", required = false) String timestamp,
+                                                                   @RequestPart(value = "numSpeakers", required = false) Integer numSpeakers,
+                                                                   @RequestPart(value = "minSpeakers", required = false) Integer minSpeakers,
+                                                                   @RequestPart(value = "maxSpeakers", required = false) Integer maxSpeakers,
+                                                                   @RequestPart(value = "model", required = false) String model,
+                                                                   @RequestPart(value = "outputFormat", required = false) String outputFormat,
+                                                                   @RequestPart(value = "diarize", required = false) Boolean diarize,
+                                                                   @RequestPart(value = "alignModel", required = false) String alignModel,
+                                                                   @RequestPart(value = "vadMethod", required = false) String vadMethod,
+                                                                   @RequestPart(value = "batchSize", required = false) Integer batchSize,
+                                                                   @RequestPart(value = "computeType", required = false) String computeType,
+                                                                   @RequestPart(value = "vadOnset", required = false) Float vadOnset,
+                                                                   @RequestPart(value = "vadOffset", required = false) Float vadOffset,
+                                                                   @RequestPart(value = "chunkSize", required = false) Integer chunkSize,
+                                                                   @RequestPart(value = "diarizeModel", required = false) String diarizeModel,
+                                                                   @RequestPart(value = "temperature", required = false) Float temperature,
+                                                                   @RequestPart(value = "beamSize", required = false) Integer beamSize,
+                                                                   @RequestPart(value = "highlightWords", required = false) Boolean highlightWords,
+                                                                   @RequestPart(value = "hotwords", required = false) String hotwords) {
 
         final UUID jobId = UUID.randomUUID();
 
@@ -133,6 +209,21 @@ public class WhisperController {
                 .numSpeakers(numSpeakers)
                 .minSpeakers(minSpeakers)
                 .maxSpeakers(maxSpeakers)
+                .model(model)
+                .outputFormat(outputFormat)
+                .diarize(diarize)
+                .alignModel(alignModel)
+                .vadMethod(vadMethod)
+                .batchSize(batchSize)
+                .computeType(computeType)
+                .vadOnset(vadOnset)
+                .vadOffset(vadOffset)
+                .chunkSize(chunkSize)
+                .diarizeModel(diarizeModel)
+                .temperature(temperature)
+                .beamSize(beamSize)
+                .highlightWords(highlightWords)
+                .hotwords(hotwords)
                 .build();
 
         return computeHashCheckExistsAndSaveFile(file, jobId)
@@ -150,6 +241,21 @@ public class WhisperController {
                             .numSpeakers(uploadRequest.getNumSpeakers())
                             .minSpeakers(uploadRequest.getMinSpeakers())
                             .maxSpeakers(uploadRequest.getMaxSpeakers())
+                            .model(uploadRequest.getModel())
+                            .outputFormat(uploadRequest.getOutputFormat())
+                            .diarize(uploadRequest.getDiarize())
+                            .alignModel(uploadRequest.getAlignModel())
+                            .vadMethod(uploadRequest.getVadMethod())
+                            .batchSize(uploadRequest.getBatchSize())
+                            .computeType(uploadRequest.getComputeType())
+                            .vadOnset(uploadRequest.getVadOnset())
+                            .vadOffset(uploadRequest.getVadOffset())
+                            .chunkSize(uploadRequest.getChunkSize())
+                            .diarizeModel(uploadRequest.getDiarizeModel())
+                            .temperature(uploadRequest.getTemperature())
+                            .beamSize(uploadRequest.getBeamSize())
+                            .highlightWords(uploadRequest.getHighlightWords())
+                            .hotwords(uploadRequest.getHotwords())
                             .build();
 
                     return createAndStartJob(jobId, hashAndFilename.hash(), hashAndFilename.filename(), request);
@@ -277,7 +383,18 @@ public class WhisperController {
                     return (Void) null;
                 })
                 .then(Mono.fromCallable(() -> {
-                    String transcript = Files.readString(Paths.get(transcriptOutputBasePath).resolve(jobId.toString()));
+                    // WhisperX creates multiple output files in a jobId-specific directory
+                    // We want to read the .srt file which has the original filename with .srt extension
+                    Path outputDir = Paths.get(transcriptOutputBasePath).resolve(jobId.toString());
+                    String originalFilename = request.getFileName();
+                    // Remove extension from original filename and add .srt
+                    String srtFilename = originalFilename.contains(".")
+                        ? originalFilename.substring(0, originalFilename.lastIndexOf('.')) + ".srt"
+                        : originalFilename + ".srt";
+                    Path srtFilePath = outputDir.resolve(srtFilename);
+
+                    // Read the .srt file content
+                    String transcript = Files.readString(srtFilePath);
                     job.setStatus(new CompletedStatus("completed", transcript));
                     job.setTranscriptText(transcript);
                     return job;
@@ -300,84 +417,153 @@ public class WhisperController {
         final Process process;
         try {
             List<String> command = new ArrayList<>();
-            command.add("insanely-fast-whisper");
-            command.add("--file-name");
-            // TODO ensure this can't result in directory traversal.
-            // TODO ensure user has access rights to read and transcribe the video. Future task for if we ever make
-            //  this wrapper more standalone
+            command.add("whisperx");
+
+            // Input audio file path
             command.add(Paths.get(mediaBasePath).resolve(request.getFileName()).normalize().toString());
 
-            // TODO Not likely needed for our use case or something the client would know, or that we would want them to know
-            //if (request.getDeviceId() != null && !request.getDeviceId().isEmpty()) {
-            //    command.add("--device-id");
-            //    command.add(request.getDeviceId());
-            //}
+            // Output directory - create a video-id specific subdirectory
+            Path outputDir = Paths.get(transcriptOutputBasePath).resolve(jobId.toString());
+            command.add("--output_dir");
+            command.add(outputDir.toString());
 
-            // Generate UUID-based transcript path relative to the configured base path
-            String transcriptPath = Paths.get(transcriptOutputBasePath).resolve(jobId.toString()).toString();
-            command.add("--transcript-path");
-            command.add(transcriptPath);
+            // Model selection - use user specified or default
+            String model = (request.getModel() != null && !request.getModel().isEmpty()) ? request.getModel() : defaultModel;
+            command.add("--model");
+            command.add(model);
 
-            // External process should not be able to give us their hf tokens or
-            // trigger download of a model we don't already support.
-            // TODO see if we can support model selection while still banning
-            // automatic download if the model is not already available.
-            // if (request.getModelName() != null && !request.getModelName().isEmpty()) {
-            //     command.add("--model-name");
-            //     command.add(request.getModelName());
-            // }
-            if (request.getTask() != null && !request.getTask().isEmpty()) {
-                command.add("--task");
-                command.add(request.getTask());
+            // Device configuration
+            command.add("--device");
+            command.add(device);
+            if ("cuda".equals(device)) {
+                command.add("--device_index");
+                command.add(deviceIndex.toString());
             }
+
+            // Batch size - use user specified or default
+            Integer batchSize = (request.getBatchSize() != null) ? request.getBatchSize() : defaultBatchSize;
+            command.add("--batch_size");
+            command.add(batchSize.toString());
+
+            // Compute type - use user specified or default
+            String computeType = (request.getComputeType() != null && !request.getComputeType().isEmpty()) ? request.getComputeType() : defaultComputeType;
+            command.add("--compute_type");
+            command.add(computeType);
+
+            // Task - transcribe or translate
+            String task = (request.getTask() != null && !request.getTask().isEmpty()) ? request.getTask() : "transcribe";
+            command.add("--task");
+            command.add(task);
+
+            // Language - if specified
             if (request.getLanguage() != null && !request.getLanguage().isEmpty()) {
                 command.add("--language");
                 command.add(request.getLanguage());
             }
-            // this is something we need to have control over
-            //if (request.getBatchSize() != null) {
-            //    command.add("--batch-size");
-            //    command.add(request.getBatchSize().toString());
-            //}
-            // TODO: Not currently installed int he env
-            //if (request.getFlash() != null && request.getFlash()) {
-            //    command.add("--flash");
-            //   command.add("True");
-            //}
+
+            // Output format - use user specified or default (we want .srt)
+            String outputFormat = (request.getOutputFormat() != null && !request.getOutputFormat().isEmpty()) ? request.getOutputFormat() : defaultOutputFormat;
+            command.add("--output_format");
+            command.add(outputFormat);
+
+            // Alignment model - use user specified or default
+            String alignModel = (request.getAlignModel() != null && !request.getAlignModel().isEmpty()) ? request.getAlignModel() : defaultAlignModel;
+            if (alignModel != null && !alignModel.isEmpty()) {
+                command.add("--align_model");
+                command.add(alignModel);
+            }
+
+            // VAD method - use user specified or default
+            String vadMethod = (request.getVadMethod() != null && !request.getVadMethod().isEmpty()) ? request.getVadMethod() : defaultVadMethod;
+            command.add("--vad_method");
+            command.add(vadMethod);
+
+            // VAD parameters - use user specified or defaults
+            if (request.getVadOnset() != null) {
+                command.add("--vad_onset");
+                command.add(request.getVadOnset().toString());
+            }
+            if (request.getVadOffset() != null) {
+                command.add("--vad_offset");
+                command.add(request.getVadOffset().toString());
+            }
+            if (request.getChunkSize() != null) {
+                command.add("--chunk_size");
+                command.add(request.getChunkSize().toString());
+            }
+
+            // Diarization options
+            Boolean diarize = request.getDiarize() != null ? request.getDiarize() : false;
+            if (diarize) {
+                command.add("--diarize");
+                // Speaker count options
+                if (request.getNumSpeakers() != null) {
+                    command.add("--min_speakers");
+                    command.add(request.getNumSpeakers().toString());
+                    command.add("--max_speakers");
+                    command.add(request.getNumSpeakers().toString());
+                } else {
+                    if (request.getMinSpeakers() != null) {
+                        command.add("--min_speakers");
+                        command.add(request.getMinSpeakers().toString());
+                    }
+                    if (request.getMaxSpeakers() != null) {
+                        command.add("--max_speakers");
+                        command.add(request.getMaxSpeakers().toString());
+                    }
+                }
+                // Diarization model - use user specified or default
+                String diarizeModel = (request.getDiarizeModel() != null && !request.getDiarizeModel().isEmpty()) ? request.getDiarizeModel() : "pyannote/speaker-diarization-community-1";
+                command.add("--diarize_model");
+                command.add(diarizeModel);
+            }
+
+            // Sampling parameters
+            if (request.getTemperature() != null) {
+                command.add("--temperature");
+                command.add(request.getTemperature().toString());
+            }
+            if (request.getBeamSize() != null) {
+                command.add("--beam_size");
+                command.add(request.getBeamSize().toString());
+            }
+
+            // Highlight words in output
+            if (request.getHighlightWords() != null && request.getHighlightWords()) {
+                command.add("--highlight_words");
+                command.add("True");
+            }
+
+            // Hotwords for better recognition
+            if (request.getHotwords() != null && !request.getHotwords().isEmpty()) {
+                command.add("--hotwords");
+                command.add(request.getHotwords());
+            }
+
+            // HuggingFace token for gated models
+            String hfTokenToUse = (hfToken != null && !hfToken.isEmpty()) ? hfToken : null;
+            if (hfTokenToUse != null) {
+                command.add("--hf_token");
+                command.add(hfTokenToUse);
+            }
+
+            // Progress printing
+            if (printProgress != null && printProgress) {
+                command.add("--print_progress");
+                command.add("True");
+            }
+
+            // Legacy timestamp parameter (for backward compatibility if still used)
             if (request.getTimestamp() != null && !request.getTimestamp().isEmpty()) {
-                command.add("--timestamp");
-                command.add(request.getTimestamp());
-            }
-            // External process should not be able to give us their hf tokens or
-            // trigger download of a model we don't already support.
-            //if (request.getHfToken() != null && !request.getHfToken().isEmpty()) {
-            //    command.add("--hf-token");
-            //    command.add(request.getHfToken());
-            //}
-            // External process should not be able to give us their hf tokens or
-            // trigger download of a model we don't already support.
-            // TODO see if we can support model selection while still banning
-            // automatic download if the model is not already available.
-            //if (request.getDiarizationModel() != null && !request.getDiarizationModel().isEmpty()) {
-            //    command.add("--diarization_model");
-            //    command.add(request.getDiarizationModel());
-            //}
-            if (request.getNumSpeakers() != null) {
-                command.add("--num-speakers");
-                command.add(request.getNumSpeakers().toString());
-            }
-            if (request.getMinSpeakers() != null) {
-                command.add("--min-speakers");
-                command.add(request.getMinSpeakers().toString());
-            }
-            if (request.getMaxSpeakers() != null) {
-                command.add("--max-speakers");
-                command.add(request.getMaxSpeakers().toString());
+                // whisperX uses different timestamp handling, but we'll keep this for compatibility
+                // Note: whisperX has different segment resolution options
+                command.add("--segment_resolution");
+                command.add(request.getTimestamp()); // "sentence" or "chunk"
             }
 
             process = Runtime.getRuntime().exec(command.toArray(new String[0]));
         } catch (IOException e) {
-            throw new RuntimeException("failed to initialize the process", e);
+            throw new RuntimeException("failed to initialize the whisperx process", e);
         }
 
         final BufferedReader solveOutput = new BufferedReader(new InputStreamReader(process.getInputStream()));
@@ -386,39 +572,23 @@ public class WhisperController {
         solveOutput.lines().forEach(System.out::println);
 
         try {
-
             /**
-             * TODO no idea how long these take.
-             *
-             * It can vary by model and runner and media length.
-             *
-             * We may have to allow the timeout to be a request param
-             *
-             * But as of now , insanely fast reports processing times of less than 30 minutes ( some times less than 2 minutes ) for 150 min of audio.
-             *
-             * But that should be the faster offering.
-             *
-             * Setting to 4 hours for now.... which is perhaps too long to be useful. But we'll see.
+             * WhisperX can take significant time depending on model, batch size, and media length.
+             * Setting to 4 hours for now, which may need adjustment based on production usage.
              */
             process.onExit().get(4, TimeUnit.HOURS);
         } catch (TimeoutException te) {
-
             try {
                 process.destroy();
             } catch (RuntimeException processTerminateFailure) {
                 te.addSuppressed(processTerminateFailure);
             }
-
-            throw new RuntimeException("Process failed to complete in time: " + solveErrors.lines().collect(Collectors.joining()), te);
+            throw new RuntimeException("WhisperX process failed to complete in time: " + solveErrors.lines().collect(Collectors.joining()), te);
         } catch (ExecutionException | InterruptedException e) {
-            throw new RuntimeException(solveErrors.lines().collect(Collectors.joining()), e);
+            throw new RuntimeException("WhisperX process error: " + solveErrors.lines().collect(Collectors.joining()), e);
         }
         if (process.exitValue() != 0) {
-
-            /*
-             * TODO we need to save this with the job id so that the failure result can be handed to the client when it polls
-             */
-            throw new RuntimeException("Process failed: " + solveErrors.lines().collect(Collectors.joining()));
+            throw new RuntimeException("WhisperX process failed: " + solveErrors.lines().collect(Collectors.joining()));
         }
     }
 
