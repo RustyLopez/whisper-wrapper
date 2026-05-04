@@ -4,7 +4,7 @@ package com.chaostensor.whisperwrapper.dto;
 import lombok.Builder;
 import lombok.Value;
 import lombok.extern.jackson.Jacksonized;
-import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.codec.multipart.FilePart;
 
 @Value
 @Builder
@@ -14,7 +14,7 @@ public class WhisperUploadRequest {
     /**
      * The uploaded video file
      */
-    MultipartFile file;
+    FilePart file;
 
     /**
      * Task to perform: transcribe or translate to another language. Default: "transcribe"

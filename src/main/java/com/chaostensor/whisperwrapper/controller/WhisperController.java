@@ -14,9 +14,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.http.MediaType;
+import org.springframework.http.codec.multipart.FilePart;
+import org.springframework.core.io.buffer.DataBuffer;
 import reactor.core.publisher.Mono;
 
 import java.io.BufferedReader;
@@ -182,59 +185,17 @@ public class WhisperController {
      * Uses hash of file content + UUID as filename, checks for duplicates.
      */
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public Mono<ResponseEntity<WhisperResponse>> createFromUpload(@RequestPart("file") MultipartFile file,
-                                                                    @RequestPart(value = "task", required = false) String task,
-                                                                    @RequestPart(value = "language", required = false) String language,
-                                                                    @RequestPart(value = "timestamp", required = false) String timestamp,
-                                                                    @RequestPart(value = "numSpeakers", required = false) Integer numSpeakers,
-                                                                    @RequestPart(value = "minSpeakers", required = false) Integer minSpeakers,
-                                                                    @RequestPart(value = "maxSpeakers", required = false) Integer maxSpeakers,
-                                                                    @RequestPart(value = "model", required = false) String model,
-                                                                    @RequestPart(value = "outputFormat", required = false) String outputFormat,
-                                                                    @RequestPart(value = "diarize", required = false) Boolean diarize,
-                                                                    @RequestPart(value = "alignModel", required = false) String alignModel,
-                                                                    @RequestPart(value = "vadMethod", required = false) String vadMethod,
-                                                                    @RequestPart(value = "vadOnset", required = false) Float vadOnset,
-                                                                    @RequestPart(value = "vadOffset", required = false) Float vadOffset,
-                                                                    @RequestPart(value = "chunkSize", required = false) Integer chunkSize,
-                                                                    @RequestPart(value = "diarizeModel", required = false) String diarizeModel,
-                                                                    @RequestPart(value = "temperature", required = false) Float temperature,
-                                                                    @RequestPart(value = "beamSize", required = false) Integer beamSize,
-                                                                    @RequestPart(value = "highlightWords", required = false) Boolean highlightWords,
-                                                                    @RequestPart(value = "hotwords", required = false) String hotwords) {
+    public Mono<ResponseEntity<WhisperResponse>> createFromUpload(@ModelAttribute WhisperUploadRequest uploadRequest) {
 
-        WhisperUploadRequest uploadRequest = WhisperUploadRequest.builder()
-                .file(file)
-                .task(task)
-                .language(language)
-                .timestamp(timestamp)
-                .numSpeakers(numSpeakers)
-                .minSpeakers(minSpeakers)
-                .maxSpeakers(maxSpeakers)
-                .model(model)
-                .outputFormat(outputFormat)
-                .diarize(diarize)
-                .alignModel(alignModel)
-                .vadMethod(vadMethod)
-                .vadOnset(vadOnset)
-                .vadOffset(vadOffset)
-                .chunkSize(chunkSize)
-                .diarizeModel(diarizeModel)
-                .temperature(temperature)
-                .beamSize(beamSize)
-                .highlightWords(highlightWords)
-                .hotwords(hotwords)
-                .build();
-
-        return computeHashAndCheckExists(file)
+        return computeHashAndCheckExists(uploadRequest.getFile())
                 .flatMap(hashAndExists -> {
                     if (hashAndExists.exists()) {
                         return Mono.error(new DuplicateRequestException());
                     }
                     return createJob(hashAndExists.hash(), null)
-                            .flatMap(savedJob -> {
-                                String filename = savedJob.getId().toString();
-                                return saveFile(file, filename)
+                             .flatMap(savedJob -> {
+                                 String filename = savedJob.getId().toString();
+                                 return saveFile(uploadRequest.getFile(), filename)
                                         .then(Mono.fromCallable(() -> {
                                             savedJob.setVideoPath(filename);
                                             return savedJob;
@@ -338,6 +299,18 @@ public class WhisperController {
         });
     }
 
+    private Mono<String> computeFileHash(FilePart filePart) {
+        return filePart.content()
+                .reduce(DataBuffer::write)
+                .map(buffer -> {
+                    try (var inputStream = buffer.asInputStream()) {
+                        return computeHashFromInputStream(inputStream);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+    }
+
     private String computeHashFromInputStream(InputStream inputStream) throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         byte[] buffer = new byte[8192];
@@ -363,6 +336,15 @@ public class WhisperController {
         });
     }
 
+    private Mono<Void> saveFile(FilePart filePart, String filename) {
+        Path mediaPath = Paths.get(mediaBasePath);
+        Path targetPath = mediaPath.resolve(filename);
+        return Mono.fromCallable(() -> {
+            Files.createDirectories(mediaPath);
+            return null;
+        }).then(filePart.transferTo(targetPath));
+    }
+
     private Mono<WhisperJob> createJob(String hash, String filename) {
         WhisperJob job = new WhisperJob(null, hash, new PendingStatus("pending"), null, filename);
         return whisperJobRepository.save(job);
@@ -380,6 +362,12 @@ public class WhisperController {
 
     private Mono<HashAndExists> computeHashAndCheckExists(MultipartFile file) {
         return computeFileHash(file)
+                .flatMap(hash -> checkHashExists(hash)
+                        .map(exists -> new HashAndExists(hash, exists)));
+    }
+
+    private Mono<HashAndExists> computeHashAndCheckExists(FilePart filePart) {
+        return computeFileHash(filePart)
                 .flatMap(hash -> checkHashExists(hash)
                         .map(exists -> new HashAndExists(hash, exists)));
     }
