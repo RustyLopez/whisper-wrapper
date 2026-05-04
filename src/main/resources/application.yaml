@@ -56,7 +56,7 @@ app:
     #
     # For now no...
     #
-    default-output-format: ${WHISPERX_DEFAULT_OUTPUT_FORMAT:all}
+    default-output-format: ${WHISPERX_DEFAULT_OUTPUT_FORMAT:srt}
     # Device to use for inference
     # TODO if we can get a GPU dedicated to this component or more vram we can do cuda, but for now we are using cuda for the llm component.
     device: ${WHISPERX_DEVICE:cpu}

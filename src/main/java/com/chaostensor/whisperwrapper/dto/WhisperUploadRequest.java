@@ -58,6 +58,8 @@ public class WhisperUploadRequest {
 
     /**
      * Apply diarization to assign speaker labels to each segment/word. Default: false
+     *
+     * @see {@link #diarizeModel} for why this is disabled by default and probably will be difficult to get enabled.
      */
     Boolean diarize;
 
@@ -88,6 +90,12 @@ public class WhisperUploadRequest {
 
     /**
      * Name of the speaker diarization model to use. Default: "pyannote/speaker-diarization-community-1"
+     *                    NOTE: pyannote/speaker-diarization-community-1 has strict download requirements
+     *                    SO... we'll be disabling diarization by default. You'll need the model already
+     *                    downloaded or to provide an HF token ( I assume that will work if your account
+     *                    has already accepted the privacy invading terms ), to use it.
+     *
+     *                    I'm not seeing a lot of alts for diarization rn so. It's disabled by default.
      */
     String diarizeModel;
 
