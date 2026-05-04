@@ -189,7 +189,7 @@ class WhisperControllerTest {
         Path mediaPath = Paths.get("./media-input");
         Files.createDirectories(mediaPath);
         Path filePath = mediaPath.resolve(filename);
-        Files.write(filePath, "test content".getBytes());
+        Files.write(filePath, "test content 2"/*because we are saving everything to the db for all tests.. avoid duplicate request*/.getBytes());
 
         WhisperRequest request = WhisperRequest.builder()
                 .fileName(filename)
