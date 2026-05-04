@@ -72,16 +72,6 @@ public class WhisperUploadRequest {
     String vadMethod;
 
     /**
-     * The preferred batch size for inference. Default: 8
-     */
-    Integer batchSize;
-
-    /**
-     * Compute type for computation: "default", "float16", "float32", "int8". Default: "default"
-     */
-    String computeType;
-
-    /**
      * Onset threshold for VAD (see pyannote.audio), reduce this if speech is not being detected. Default: 0.500
      */
     Float vadOnset;
@@ -103,6 +93,8 @@ public class WhisperUploadRequest {
 
     /**
      * Temperature to use for sampling. Default: 0
+     *
+     * "Temperature in an AI model is a parameter that controls the randomness of the model's output during text generation."
      */
     Float temperature;
 

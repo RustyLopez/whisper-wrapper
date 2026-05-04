@@ -121,8 +121,14 @@ public class WhisperRequest {
 
       /**
        * Format of the output file. Options: "all", "srt", "vtt", "txt", "tsv", "json", "aud". Default: "all"
+       *
+       * TODO we are hard coding an assumption that this is sr ( or all ).
+       *
+       * We need to make it configurable. IF we do then we could let the end user specify this.
+       *
+       * For now no...
        */
-      String outputFormat;
+      // String outputFormat;
 
       /**
        * Apply diarization to assign speaker labels to each segment/word. Default: false
@@ -138,12 +144,6 @@ public class WhisperRequest {
        * VAD method to be used: "pyannote" or "silero". Default: "pyannote"
        */
       String vadMethod;
-
-      /**
-       * The preferred batch size for inference. Default: 8
-       */
-      Integer batchSize;
-
       /**
        * Compute type for computation: "default", "float16", "float32", "int8". Default: "default"
        */

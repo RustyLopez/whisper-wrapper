@@ -40,20 +40,31 @@ app:
     # Default model to use if not specified by user
     default-model: ${WHISPERX_DEFAULT_MODEL:large-v2}
     # Default batch size for inference
-    default-batch-size: ${WHISPERX_DEFAULT_BATCH_SIZE:8}
+    # TODO: make sure we have enough ram for this.
+    batch-size: ${WHISPERX_BATCH_SIZE:8}
     # Default compute type for computation
-    default-compute-type: ${WHISPERX_DEFAULT_COMPUTE_TYPE:default}
+    compute-type: ${WHISPERX_COMPUTE_TYPE:default}# TODO explore other options.
     # Default alignment model (auto-selected if null)
     default-align-model: ${WHISPERX_DEFAULT_ALIGN_MODEL:}
     # Default VAD method
     default-vad-method: ${WHISPERX_DEFAULT_VAD_METHOD:pyannote}
     # Default output format
+    #
+    # TODO we are hard coding an assumption that this is srt, or 'all' which will include srt
+    #
+    # We need to make it configurable. IF we do then we could let the end user specify this
+    #
+    # For now no...
+    #
     default-output-format: ${WHISPERX_DEFAULT_OUTPUT_FORMAT:all}
     # Device to use for inference
-    device: ${WHISPERX_DEVICE:cuda}
+    # TODO if we can get a GPU dedicated to this component or more vram we can do cuda, but for now we are using cuda for the llm component.
+    device: ${WHISPERX_DEVICE:cpu}
     # Device index for FasterWhisper inference
     device-index: ${WHISPERX_DEVICE_INDEX:0}
     # Whether to print progress during transcription
     print-progress: ${WHISPERX_PRINT_PROGRESS:false}
-    # HuggingFace token for accessing gated models (diarization)
-    hf-token: ${WHISPERX_HF_TOKEN:}
+    # HuggingFace token for accessing gated models (diarization)   // TODO Not sure we want to allow the user to pass this in.
+    #            // IF we do we need to ensure it doesn't get stored, or if it's stored it's like GDPR deletable and
+    #            // Encrypted..etc  um for now.
+    # hf-token: ${WHISPERX_HF_TOKEN:}

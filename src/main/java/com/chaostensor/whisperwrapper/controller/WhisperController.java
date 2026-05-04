@@ -4,7 +4,6 @@ package com.chaostensor.whisperwrapper.controller;
 import com.chaostensor.whisperwrapper.dto.WhisperRequest;
 import com.chaostensor.whisperwrapper.dto.WhisperResponse;
 import com.chaostensor.whisperwrapper.dto.WhisperUploadRequest;
-import com.chaostensor.whisperwrapper.dto.WhisperStatus;
 import com.chaostensor.whisperwrapper.dto.CompletedStatus;
 import com.chaostensor.whisperwrapper.dto.WhisperCollectionResponse;
 import com.chaostensor.whisperwrapper.dto.PendingStatus;
@@ -16,7 +15,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.RequestPart;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.http.MediaType;
 import reactor.core.publisher.Mono;
 
@@ -81,14 +79,14 @@ public class WhisperController {
     /**
      * Default batch size for inference.
      */
-    @Value("${app.whisperx.default-batch-size}")
-    Integer defaultBatchSize;
+    @Value("${app.whisperx.batch-size}")
+    Integer batchSize;
 
     /**
      * Default compute type for computation.
      */
-    @Value("${app.whisperx.default-compute-type}")
-    String defaultComputeType;
+    @Value("${app.whisperx.compute-type}")
+    String computeType;
 
     /**
      * Default alignment model (auto-selected if empty).
@@ -106,7 +104,7 @@ public class WhisperController {
      * Default output format.
      */
     @Value("${app.whisperx.default-output-format}")
-    String defaultOutputFormat;
+    String outputFormat;
 
     /**
      * Device to use for inference.
@@ -129,8 +127,11 @@ public class WhisperController {
     /**
      * HuggingFace token for accessing gated models (diarization).
      */
-    @Value("${app.whisperx.hf-token:}")
-    String hfToken;
+    //@Value("${app.whisperx.hf-token:}")
+    // TODO Not sure we want to allow the user to pass this in.
+            // IF we do we need to ensure it doesn't get stored, or if it's stored it's like GDPR deletable and
+            // Encrypted..etc  um for now.
+    //String hfToken;
 
     private final WhisperJobRepository whisperJobRepository;
 
@@ -188,8 +189,6 @@ public class WhisperController {
                                                                    @RequestPart(value = "diarize", required = false) Boolean diarize,
                                                                    @RequestPart(value = "alignModel", required = false) String alignModel,
                                                                    @RequestPart(value = "vadMethod", required = false) String vadMethod,
-                                                                   @RequestPart(value = "batchSize", required = false) Integer batchSize,
-                                                                   @RequestPart(value = "computeType", required = false) String computeType,
                                                                    @RequestPart(value = "vadOnset", required = false) Float vadOnset,
                                                                    @RequestPart(value = "vadOffset", required = false) Float vadOffset,
                                                                    @RequestPart(value = "chunkSize", required = false) Integer chunkSize,
@@ -214,8 +213,6 @@ public class WhisperController {
                 .diarize(diarize)
                 .alignModel(alignModel)
                 .vadMethod(vadMethod)
-                .batchSize(batchSize)
-                .computeType(computeType)
                 .vadOnset(vadOnset)
                 .vadOffset(vadOffset)
                 .chunkSize(chunkSize)
@@ -242,12 +239,9 @@ public class WhisperController {
                             .minSpeakers(uploadRequest.getMinSpeakers())
                             .maxSpeakers(uploadRequest.getMaxSpeakers())
                             .model(uploadRequest.getModel())
-                            .outputFormat(uploadRequest.getOutputFormat())
                             .diarize(uploadRequest.getDiarize())
                             .alignModel(uploadRequest.getAlignModel())
                             .vadMethod(uploadRequest.getVadMethod())
-                            .batchSize(uploadRequest.getBatchSize())
-                            .computeType(uploadRequest.getComputeType())
                             .vadOnset(uploadRequest.getVadOnset())
                             .vadOffset(uploadRequest.getVadOffset())
                             .chunkSize(uploadRequest.getChunkSize())
@@ -440,13 +434,13 @@ public class WhisperController {
                 command.add(deviceIndex.toString());
             }
 
-            // Batch size - use user specified or default
-            Integer batchSize = (request.getBatchSize() != null) ? request.getBatchSize() : defaultBatchSize;
+            // Batch size : This depends heavily on deployment env resources and is not something the user should change from the api layer.
+            Integer batchSize = this.batchSize;
             command.add("--batch_size");
             command.add(batchSize.toString());
 
             // Compute type - use user specified or default
-            String computeType = (request.getComputeType() != null && !request.getComputeType().isEmpty()) ? request.getComputeType() : defaultComputeType;
+            String computeType = (request.getComputeType() != null && !request.getComputeType().isEmpty()) ? request.getComputeType() : this.computeType;
             command.add("--compute_type");
             command.add(computeType);
 
@@ -462,7 +456,14 @@ public class WhisperController {
             }
 
             // Output format - use user specified or default (we want .srt)
-            String outputFormat = (request.getOutputFormat() != null && !request.getOutputFormat().isEmpty()) ? request.getOutputFormat() : defaultOutputFormat;
+            /*
+             * TODO we are hard coding an assumption that this is srt ( or all ).
+             *
+             * We need to make it configurable. IF we do then we could let the end user specify this.
+             *
+             * For now no...
+             */
+            String outputFormat = this.outputFormat;// (request.getOutputFormat() != null && !request.getOutputFormat().isEmpty()) ? request.getOutputFormat() : this.outputFormat;
             command.add("--output_format");
             command.add(outputFormat);
 
@@ -541,11 +542,14 @@ public class WhisperController {
             }
 
             // HuggingFace token for gated models
-            String hfTokenToUse = (hfToken != null && !hfToken.isEmpty()) ? hfToken : null;
-            if (hfTokenToUse != null) {
-                command.add("--hf_token");
-                command.add(hfTokenToUse);
-            }
+            // TODO Not sure we want to allow the user to pass this in.
+            // IF we do we need to ensure it doesn't get stored, or if it's stored it's like GDPR deletable and
+            // Encrypted..etc  um for now.
+            // String hfTokenToUse = (hfToken != null && !hfToken.isEmpty()) ? hfToken : null;
+            //if (hfTokenToUse != null) {
+            //    command.add("--hf_token");
+            //   command.add(hfTokenToUse);
+            //}
 
             // Progress printing
             if (printProgress != null && printProgress) {
