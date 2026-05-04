@@ -49,12 +49,12 @@ FROM python:3.10-trixie
 # --enable-lgpl (and avoiding --enable-gpl and non-free options) and including the source or a clear build manifest.
 #
 # EDIT OKAY if using trixie, we don't need to install ffmpeg. It's already been bundled and licensed. So that saves a lot
-# of licensing heartache at the cost of a much larger image.
-#RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && \
-#    apt-get clean && rm -rf /var/lib/apt/lists/* && \
-#    mkdir -p /usr/share/licenses/ffmpeg && \
-#    cp -r /usr/share/doc/ffmpeg/copyright /usr/share/licenses/ffmpeg/ || true
-# RUN apt show ffmpeg
+# of licensing heartache at the cost of a much larger image. EDIT: Nvm the version that ships is not sufficient
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /usr/share/licenses/ffmpeg && \
+    cp -r /usr/share/doc/ffmpeg/copyright /usr/share/licenses/ffmpeg/ || true
+RUN apt show ffmpeg
 # TOD: the above to attempt to see how this particular bundle  of ffmpeg is licensed
 # Recommended for our Docker hub file if/when we get to that point
 # This image includes the FFmpeg package (via apt). It is licensed under LGPL 2.1 (with possible GPL components).

@@ -43,7 +43,7 @@ app:
     # TODO: make sure we have enough ram for this.
     batch-size: ${WHISPERX_BATCH_SIZE:8}
     # Default compute type for computation
-    compute-type: ${WHISPERX_COMPUTE_TYPE:default}# TODO explore other options.
+    compute-type: ${WHISPERX_COMPUTE_TYPE:default} # TODO explore other options.
     # Default alignment model (auto-selected if null)
     default-align-model: ${WHISPERX_DEFAULT_ALIGN_MODEL:}
     # Default VAD method

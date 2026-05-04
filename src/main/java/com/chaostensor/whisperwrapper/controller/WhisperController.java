@@ -565,6 +565,7 @@ public class WhisperController {
                 command.add(request.getTimestamp()); // "sentence" or "chunk"
             }
 
+            log.info("command to run: command" + command);
             process = Runtime.getRuntime().exec(command.toArray(new String[0]));
         } catch (IOException e) {
             throw new RuntimeException("failed to initialize the whisperx process", e);
