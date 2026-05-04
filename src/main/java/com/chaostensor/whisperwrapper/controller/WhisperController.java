@@ -399,6 +399,7 @@ public class WhisperController {
                     return (Void) null;
                 }))
                 .doOnError(e -> {
+                    log.error("failed to generate transcript", e);
                     job.setStatus(new PendingStatus("failed"));
                     whisperJobRepository.save(job).subscribe(); // fire and forget
                 });
