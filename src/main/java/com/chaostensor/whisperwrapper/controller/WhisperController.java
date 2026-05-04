@@ -9,6 +9,7 @@ import com.chaostensor.whisperwrapper.dto.WhisperCollectionResponse;
 import com.chaostensor.whisperwrapper.dto.PendingStatus;
 import com.chaostensor.whisperwrapper.entity.WhisperJob;
 import com.chaostensor.whisperwrapper.repository.WhisperJobRepository;
+import com.chaostensor.whisperwrapper.service.ProcessService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -134,10 +135,12 @@ public class WhisperController {
     //String hfToken;
 
     private final WhisperJobRepository whisperJobRepository;
+    private final ProcessService processService;
 
 
-    public WhisperController(WhisperJobRepository whisperJobRepository) {
+    public WhisperController(WhisperJobRepository whisperJobRepository, ProcessService processService) {
         this.whisperJobRepository = whisperJobRepository;
+        this.processService = processService;
     }
 
     /**
@@ -423,195 +426,169 @@ public class WhisperController {
 
     private Mono<Void> kickOffWhisperJob(final WhisperRequest request, final UUID jobId) {
         return Mono.fromCallable(() -> {
-            final Process process;
-            try {
-            List<String> command = new ArrayList<>();
-            command.add("whisperx");
+            List<String> command = buildWhisperCommand(request, jobId);
+            log.info("command to run: {}", command);
+            return command;
+        }).flatMap(processService::executeCommand);
+    }
 
-            // Input audio file path
-            command.add(Paths.get(mediaBasePath).resolve(request.getFileName()).normalize().toString());
+    private List<String> buildWhisperCommand(WhisperRequest request, UUID jobId) {
+        List<String> command = new ArrayList<>();
+        command.add("whisperx");
 
-            // Output directory - create a video-id specific subdirectory
-            Path outputDir = Paths.get(transcriptOutputBasePath).resolve(jobId.toString());
-            command.add("--output_dir");
-            command.add(outputDir.toString());
+        // Input audio file path
+        command.add(Paths.get(mediaBasePath).resolve(request.getFileName()).normalize().toString());
 
-            // Model selection - use user specified or default
-            String model = (request.getModel() != null && !request.getModel().isEmpty()) ? request.getModel() : defaultModel;
-            command.add("--model");
-            command.add(model);
+        // Output directory - create a video-id specific subdirectory
+        Path outputDir = Paths.get(transcriptOutputBasePath).resolve(jobId.toString());
+        command.add("--output_dir");
+        command.add(outputDir.toString());
 
-            // Device configuration
-            command.add("--device");
-            command.add(device);
-            if ("cuda".equals(device)) {
-                command.add("--device_index");
-                command.add(deviceIndex.toString());
-            }
+        // Model selection - use user specified or default
+        String model = (request.getModel() != null && !request.getModel().isEmpty()) ? request.getModel() : defaultModel;
+        command.add("--model");
+        command.add(model);
 
-            // Batch size : This depends heavily on deployment env resources and is not something the user should change from the api layer.
-            Integer batchSize = this.batchSize;
-            command.add("--batch_size");
-            command.add(batchSize.toString());
+        // Device configuration
+        command.add("--device");
+        command.add(device);
+        if ("cuda".equals(device)) {
+            command.add("--device_index");
+            command.add(deviceIndex.toString());
+        }
 
-            // Compute type - use user specified or default
-            String computeType = (request.getComputeType() != null && !request.getComputeType().isEmpty()) ? request.getComputeType() : this.computeType;
-            command.add("--compute_type");
-            command.add(computeType);
+        // Batch size : This depends heavily on deployment env resources and is not something the user should change from the api layer.
+        Integer batchSize = this.batchSize;
+        command.add("--batch_size");
+        command.add(batchSize.toString());
 
-            // Task - transcribe or translate
-            String task = (request.getTask() != null && !request.getTask().isEmpty()) ? request.getTask() : "transcribe";
-            command.add("--task");
-            command.add(task);
+        // Compute type - use user specified or default
+        String computeType = (request.getComputeType() != null && !request.getComputeType().isEmpty()) ? request.getComputeType() : this.computeType;
+        command.add("--compute_type");
+        command.add(computeType);
 
-            // Language - if specified
-            if (request.getLanguage() != null && !request.getLanguage().isEmpty()) {
-                command.add("--language");
-                command.add(request.getLanguage());
-            }
+        // Task - transcribe or translate
+        String task = (request.getTask() != null && !request.getTask().isEmpty()) ? request.getTask() : "transcribe";
+        command.add("--task");
+        command.add(task);
 
-            // Output format - use user specified or default (we want .srt)
-            /*
-             * TODO we are hard coding an assumption that this is srt ( or all ).
-             *
-             * We need to make it configurable. IF we do then we could let the end user specify this.
-             *
-             * For now no...
-             */
-            String outputFormat = this.outputFormat;// (request.getOutputFormat() != null && !request.getOutputFormat().isEmpty()) ? request.getOutputFormat() : this.outputFormat;
-            command.add("--output_format");
-            command.add(outputFormat);
+        // Language - if specified
+        if (request.getLanguage() != null && !request.getLanguage().isEmpty()) {
+            command.add("--language");
+            command.add(request.getLanguage());
+        }
 
-            // Alignment model - use user specified or default
-            String alignModel = (request.getAlignModel() != null && !request.getAlignModel().isEmpty()) ? request.getAlignModel() : defaultAlignModel;
-            if (alignModel != null && !alignModel.isEmpty()) {
-                command.add("--align_model");
-                command.add(alignModel);
-            }
+        // Output format - use user specified or default (we want .srt)
+        /*
+         * TODO we are hard coding an assumption that this is srt ( or all ).
+         *
+         * We need to make it configurable. IF we do then we could let the end user specify this.
+         *
+         * For now no...
+         */
+        String outputFormat = this.outputFormat;// (request.getOutputFormat() != null && !request.getOutputFormat().isEmpty()) ? request.getOutputFormat() : this.outputFormat;
+        command.add("--output_format");
+        command.add(outputFormat);
 
-            // VAD method - use user specified or default
-            String vadMethod = (request.getVadMethod() != null && !request.getVadMethod().isEmpty()) ? request.getVadMethod() : defaultVadMethod;
-            command.add("--vad_method");
-            command.add(vadMethod);
+        // Alignment model - use user specified or default
+        String alignModel = (request.getAlignModel() != null && !request.getAlignModel().isEmpty()) ? request.getAlignModel() : defaultAlignModel;
+        if (alignModel != null && !alignModel.isEmpty()) {
+            command.add("--align_model");
+            command.add(alignModel);
+        }
 
-            // VAD parameters - use user specified or defaults
-            if (request.getVadOnset() != null) {
-                command.add("--vad_onset");
-                command.add(request.getVadOnset().toString());
-            }
-            if (request.getVadOffset() != null) {
-                command.add("--vad_offset");
-                command.add(request.getVadOffset().toString());
-            }
-            if (request.getChunkSize() != null) {
-                command.add("--chunk_size");
-                command.add(request.getChunkSize().toString());
-            }
+        // VAD method - use user specified or default
+        String vadMethod = (request.getVadMethod() != null && !request.getVadMethod().isEmpty()) ? request.getVadMethod() : defaultVadMethod;
+        command.add("--vad_method");
+        command.add(vadMethod);
 
-            // Diarization options
-            Boolean diarize = request.getDiarize() != null ? request.getDiarize() : false;
-            if (diarize) {
-                command.add("--diarize");
-                // Speaker count options
-                if (request.getNumSpeakers() != null) {
+        // VAD parameters - use user specified or defaults
+        if (request.getVadOnset() != null) {
+            command.add("--vad_onset");
+            command.add(request.getVadOnset().toString());
+        }
+        if (request.getVadOffset() != null) {
+            command.add("--vad_offset");
+            command.add(request.getVadOffset().toString());
+        }
+        if (request.getChunkSize() != null) {
+            command.add("--chunk_size");
+            command.add(request.getChunkSize().toString());
+        }
+
+        // Diarization options
+        Boolean diarize = request.getDiarize() != null ? request.getDiarize() : false;
+        if (diarize) {
+            command.add("--diarize");
+            // Speaker count options
+            if (request.getNumSpeakers() != null) {
+                command.add("--min_speakers");
+                command.add(request.getNumSpeakers().toString());
+                command.add("--max_speakers");
+                command.add(request.getNumSpeakers().toString());
+            } else {
+                if (request.getMinSpeakers() != null) {
                     command.add("--min_speakers");
-                    command.add(request.getNumSpeakers().toString());
-                    command.add("--max_speakers");
-                    command.add(request.getNumSpeakers().toString());
-                } else {
-                    if (request.getMinSpeakers() != null) {
-                        command.add("--min_speakers");
-                        command.add(request.getMinSpeakers().toString());
-                    }
-                    if (request.getMaxSpeakers() != null) {
-                        command.add("--max_speakers");
-                        command.add(request.getMaxSpeakers().toString());
-                    }
+                    command.add(request.getMinSpeakers().toString());
                 }
-                // Diarization model - use user specified or default
-                String diarizeModel = (request.getDiarizeModel() != null && !request.getDiarizeModel().isEmpty()) ? request.getDiarizeModel() : "pyannote/speaker-diarization-community-1";
-                command.add("--diarize_model");
-                command.add(diarizeModel);
+                if (request.getMaxSpeakers() != null) {
+                    command.add("--max_speakers");
+                    command.add(request.getMaxSpeakers().toString());
+                }
             }
-
-            // Sampling parameters
-            if (request.getTemperature() != null) {
-                command.add("--temperature");
-                command.add(request.getTemperature().toString());
-            }
-            if (request.getBeamSize() != null) {
-                command.add("--beam_size");
-                command.add(request.getBeamSize().toString());
-            }
-
-            // Highlight words in output
-            if (request.getHighlightWords() != null && request.getHighlightWords()) {
-                command.add("--highlight_words");
-                command.add("True");
-            }
-
-            // Hotwords for better recognition
-            if (request.getHotwords() != null && !request.getHotwords().isEmpty()) {
-                command.add("--hotwords");
-                command.add(request.getHotwords());
-            }
-
-            // HuggingFace token for gated models
-            // TODO Not sure we want to allow the user to pass this in.
-            // IF we do we need to ensure it doesn't get stored, or if it's stored it's like GDPR deletable and
-            // Encrypted..etc  um for now.
-            // String hfTokenToUse = (hfToken != null && !hfToken.isEmpty()) ? hfToken : null;
-            //if (hfTokenToUse != null) {
-            //    command.add("--hf_token");
-            //   command.add(hfTokenToUse);
-            //}
-
-            // Progress printing
-            if (printProgress != null && printProgress) {
-                command.add("--print_progress");
-                command.add("True");
-            }
-
-            // Legacy timestamp parameter (for backward compatibility if still used)
-            if (request.getTimestamp() != null && !request.getTimestamp().isEmpty()) {
-                // whisperX uses different timestamp handling, but we'll keep this for compatibility
-                // Note: whisperX has different segment resolution options
-                command.add("--segment_resolution");
-                command.add(request.getTimestamp()); // "sentence" or "chunk"
-            }
-
-            log.info("command to run: command" + command);
-            process = Runtime.getRuntime().exec(command.toArray(new String[0]));
-        } catch (IOException e) {
-            throw new RuntimeException("failed to initialize the whisperx process", e);
+            // Diarization model - use user specified or default
+            String diarizeModel = (request.getDiarizeModel() != null && !request.getDiarizeModel().isEmpty()) ? request.getDiarizeModel() : "pyannote/speaker-diarization-community-1";
+            command.add("--diarize_model");
+            command.add(diarizeModel);
         }
 
-        final BufferedReader solveOutput = new BufferedReader(new InputStreamReader(process.getInputStream()));
-        final BufferedReader solveErrors = new BufferedReader(new InputStreamReader(process.getErrorStream()));
-
-        solveOutput.lines().forEach(System.out::println);
-
-        try {
-            /**
-             * WhisperX can take significant time depending on model, batch size, and media length.
-             * Setting to 4 hours for now, which may need adjustment based on production usage.
-             */
-            process.onExit().get(4, TimeUnit.HOURS);
-        } catch (TimeoutException te) {
-            try {
-                process.destroy();
-            } catch (RuntimeException processTerminateFailure) {
-                te.addSuppressed(processTerminateFailure);
-            }
-            throw new RuntimeException("WhisperX process failed to complete in time: " + solveErrors.lines().collect(Collectors.joining()), te);
-        } catch (ExecutionException | InterruptedException e) {
-            throw new RuntimeException("WhisperX process error: " + solveErrors.lines().collect(Collectors.joining()), e);
+        // Sampling parameters
+        if (request.getTemperature() != null) {
+            command.add("--temperature");
+            command.add(request.getTemperature().toString());
         }
-            if (process.exitValue() != 0) {
-                throw new RuntimeException("WhisperX process failed: " + solveErrors.lines().collect(Collectors.joining()));
-            }
-            return null;
-        });
+        if (request.getBeamSize() != null) {
+            command.add("--beam_size");
+            command.add(request.getBeamSize().toString());
+        }
+
+        // Highlight words in output
+        if (request.getHighlightWords() != null && request.getHighlightWords()) {
+            command.add("--highlight_words");
+            command.add("True");
+        }
+
+        // Hotwords for better recognition
+        if (request.getHotwords() != null && !request.getHotwords().isEmpty()) {
+            command.add("--hotwords");
+            command.add(request.getHotwords());
+        }
+
+        // HuggingFace token for gated models
+        // TODO Not sure we want to allow the user to pass this in.
+        // IF we do we need to ensure it doesn't get stored, or if it's stored it's like GDPR deletable and
+        // Encrypted..etc  um for now.
+        // String hfTokenToUse = (hfToken != null && !hfToken.isEmpty()) ? hfToken : null;
+        //if (hfTokenToUse != null) {
+        //    command.add("--hf_token");
+        //   command.add(hfTokenToUse);
+        //}
+
+        // Progress printing
+        if (printProgress != null && printProgress) {
+            command.add("--print_progress");
+            command.add("True");
+        }
+
+        // Legacy timestamp parameter (for backward compatibility if still used)
+        if (request.getTimestamp() != null && !request.getTimestamp().isEmpty()) {
+            // whisperX uses different timestamp handling, but we'll keep this for compatibility
+            // Note: whisperX has different segment resolution options
+            command.add("--segment_resolution");
+            command.add(request.getTimestamp()); // "sentence" or "chunk"
+        }
+
+        return command;
     }
 
     // Record classes for flattening reactive chains
