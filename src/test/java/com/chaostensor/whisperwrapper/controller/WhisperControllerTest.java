@@ -10,11 +10,20 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.core.env.Environment;
 import org.springframework.test.context.TestPropertySource;
-import org.springframework.test.web.reactive.server.WebTestClient;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.test.web.servlet.client.MockMvcWebTestClient;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.test.annotation.Commit;
+import org.springframework.web.client.ApiVersionInserter;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import org.springframework.mock.web.MockMultipartFile;
@@ -32,22 +41,52 @@ import java.nio.file.Paths;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-@SpringBootTest
-@TestPropertySource(properties = { "spring.config.location=classpath:application-test.yaml" })
-@ExtendWith(SpringExtension.class)
+@Testcontainers
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@TestPropertySource(properties = {"spring.config.location=classpath:application-test.yaml"})
 class WhisperControllerTest {
 
 
-    @MockBean
+    @Container
+    static PostgreSQLContainer<?> postgresWithVector = new PostgreSQLContainer<>("pgvector/pgvector:pg18")
+            .withDatabaseName("testdb")
+            .withUsername("test")
+            .withPassword("test");
+
+    @DynamicPropertySource
+    static void registerProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.r2dbc.url", () -> postgresWithVector.getJdbcUrl().replace("jdbc:", "r2dbc:"));
+        registry.add("spring.r2dbc.username", postgresWithVector::getUsername);
+        registry.add("spring.r2dbc.password", postgresWithVector::getPassword);
+
+        registry.add("spring.datasource.url", postgresWithVector::getJdbcUrl);
+        registry.add("spring.datasource.username", postgresWithVector::getUsername);
+        registry.add("spring.datasource.password", postgresWithVector::getPassword);
+        registry.add("spring.datasource.driver-class-name", ()->"org.postgresql.Driver");
+
+    }
+
+
+    @Autowired
     private WhisperJobRepository whisperJobRepository;
 
-    @MockBean
+    /**
+     * Deprecated in spring boot 4, not a thing, do class level
+     */
+    //@MockBean
+    @MockitoBean
     private ProcessService processService;
 
     @Autowired
+    private Environment environment;
+
     private WebTestClient webTestClient;
 
-
+    @BeforeEach
+    void setUp() {
+        int port = environment.getProperty("local.server.port", Integer.class);
+        webTestClient = WebTestClient.bindToServer().baseUrl("http://localhost:" + port).build();
+    }
 
     @Test
     void get_WithInvalidJobId_ReturnsInternalServerError() {
@@ -93,8 +132,6 @@ class WhisperControllerTest {
     }
 
     @Test
-    @Transactional
-    @Commit
     void get_WithExistingJobId_ReturnsJob() {
         UUID jobId = UUID.randomUUID();
         WhisperJob job = new WhisperJob(jobId, "hash", new PendingStatus("pending"), null, "file.mp4");
@@ -171,8 +208,6 @@ class WhisperControllerTest {
     }
 
     @Test
-    @Transactional
-    @Commit
     void create_WithDuplicateRequest_ReturnsError() throws Exception {
         String filename = "duplicate.mp4";
         Path mediaPath = Paths.get("./media-input");
