@@ -217,7 +217,6 @@ class WhisperControllerTest {
      * @throws Exception
      */
     @Test
-    @Disabled
     void create_WithDuplicateRequest_ReturnsError() throws Exception {
         String filename = "duplicate.mp4";
         Path mediaPath = Paths.get("./media-input");
@@ -230,9 +229,8 @@ class WhisperControllerTest {
         byte[] hashBytes = digest.digest("duplicate content".getBytes());
         String hash = bytesToHex(hashBytes);
 
-        // Create existing job with same hash
-        UUID existingJobId = UUID.randomUUID();
-        WhisperJob existingJob = new WhisperJob(existingJobId, hash, new PendingStatus("pending"), null, "other.mp4");
+
+        WhisperJob existingJob = new WhisperJob(null, hash, new PendingStatus("pending"), null, "other.mp4");
         whisperJobRepository.save(existingJob).block();
 
         WhisperRequest request = WhisperRequest.builder()
@@ -247,7 +245,7 @@ class WhisperControllerTest {
                 .expectStatus().is5xxServerError(); // Assuming DuplicateRequestException causes 500
 
         Files.deleteIfExists(filePath);
-        whisperJobRepository.deleteById(existingJobId).block();
+        whisperJobRepository.deleteById(existingJob.getId()).block();
     }
 
     private static String bytesToHex(byte[] bytes) {
