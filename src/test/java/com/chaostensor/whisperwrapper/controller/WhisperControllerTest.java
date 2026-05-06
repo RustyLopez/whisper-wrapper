@@ -48,7 +48,6 @@ import static org.mockito.Mockito.*;
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles(profiles = "test")
-@TestPropertySource
 @Slf4j
 class WhisperControllerTest {
 
