@@ -15,29 +15,20 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.core.io.buffer.DataBuffer;
 import reactor.core.publisher.Mono;
 
-import java.io.BufferedReader;
-import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.security.MessageDigest;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.stream.Collectors;
+
+import org.apache.commons.codec.digest.DigestUtils;
+import com.google.common.collect.ImmutableList;
 
 /**
  * TODO: there is some duplication between the two controllers, extract that.
@@ -141,7 +132,7 @@ public class WhisperController {
     private final ProcessService processService;
 
 
-    public WhisperController(WhisperJobRepository whisperJobRepository, ProcessService processService) {
+    public WhisperController(final WhisperJobRepository whisperJobRepository, final ProcessService processService) {
         this.whisperJobRepository = whisperJobRepository;
         this.processService = processService;
     }
@@ -158,7 +149,7 @@ public class WhisperController {
 
 
         return request.flatMap(whisperRequest -> {
-            Path filePath = Paths.get(mediaBasePath).resolve(whisperRequest.getFileName());
+            final Path filePath = Paths.get(mediaBasePath).resolve(whisperRequest.getFileName());
 
             return computeHashAndCheckExists(filePath)
                     .flatMap(hashAndExists -> {
@@ -194,7 +185,7 @@ public class WhisperController {
                     }
                     return createJob(hashAndExists.hash(), null)
                              .flatMap(savedJob -> {
-                                 String filename = savedJob.getId().toString();
+                                 final String filename = savedJob.getId().toString();
                                  return saveFile(uploadRequest.getFile(), filename)
                                         .then(Mono.fromCallable(() -> {
                                             savedJob.setVideoPath(filename);
@@ -204,7 +195,7 @@ public class WhisperController {
                             });
                 })
                 .flatMap(savedJob -> {
-                    WhisperRequest request = WhisperRequest.builder()
+                    final WhisperRequest request = WhisperRequest.builder()
                             .fileName(savedJob.getVideoPath())
                             .task(uploadRequest.getTask())
                             .language(uploadRequest.getLanguage())
@@ -240,23 +231,18 @@ public class WhisperController {
 
     @GetMapping("/{jobId}")
     public Mono<ResponseEntity<WhisperResponse>> get(@PathVariable String jobId) {
-        try {
-            UUID uuid = UUID.fromString(jobId);
-            return whisperJobRepository.findById(uuid)
-                    .doOnError(e -> log.error("Error retrieving job {}", jobId, e))
-                    .flatMap(job -> {
-                        WhisperResponse response = WhisperResponse.builder().jobId(jobId).status(job.getStatus()).build();
-                        return Mono.just(ResponseEntity.ok(response));
-                    })
-                    .switchIfEmpty(Mono.just(ResponseEntity.notFound().build()))
-                    .onErrorResume(e -> {
-                        log.error("Error in get job {}", jobId, e);
-                        return Mono.just(ResponseEntity.internalServerError().build());
-                    });
-        } catch (Exception e) {
-            log.error("Invalid job id {}", jobId, e);
-            return Mono.just(ResponseEntity.internalServerError().build());
-        }
+        final UUID uuid = UUID.fromString(jobId);
+        return whisperJobRepository.findById(uuid)
+                .doOnError(e -> log.error("Error retrieving job {}", jobId, e))
+                .flatMap(job -> {
+                    final WhisperResponse response = WhisperResponse.builder().jobId(jobId).status(job.getStatus()).build();
+                    return Mono.just(ResponseEntity.ok(response));
+                })
+                .switchIfEmpty(Mono.just(ResponseEntity.notFound().build()))
+                .onErrorResume(e -> {
+                    log.error("Error in get job {}", jobId, e);
+                    return Mono.just(ResponseEntity.internalServerError().build());
+                });
     }
 
     @GetMapping("")
@@ -265,19 +251,11 @@ public class WhisperController {
                 .map(job -> job.getId().toString())
                 .collectList()
                 .map(jobIds -> {
-                    WhisperCollectionResponse response = new WhisperCollectionResponse(jobIds);
+                    final WhisperCollectionResponse response = new WhisperCollectionResponse(jobIds);
                     return ResponseEntity.ok(response);
                 })
                 .doOnError(e -> log.error("Error retrieving job list", e))
                 .onErrorResume(e -> Mono.just(ResponseEntity.internalServerError().build()));
-    }
-
-    private static String bytesToHex(byte[] bytes) {
-        StringBuilder result = new StringBuilder();
-        for (byte b : bytes) {
-            result.append(String.format("%02x", b));
-        }
-        return result.toString();
     }
 
     /**
@@ -285,16 +263,8 @@ public class WhisperController {
      */
     private Mono<String> computeFileHash(Path filePath) {
         return Mono.fromCallable(() -> {
-            try (var inputStream = Files.newInputStream(filePath)) {
-                return computeHashFromInputStream(inputStream);
-            }
-        });
-    }
-
-    private Mono<String> computeFileHash(MultipartFile file) {
-        return Mono.fromCallable(() -> {
-            try (var inputStream = file.getInputStream()) {
-                return computeHashFromInputStream(inputStream);
+            try (InputStream inputStream = Files.newInputStream(filePath)) {
+                return DigestUtils.sha256Hex(inputStream);
             }
         });
     }
@@ -303,76 +273,49 @@ public class WhisperController {
         return filePart.content()
                 .reduce(DataBuffer::write)
                 .map(buffer -> {
-                    try (var inputStream = buffer.asInputStream()) {
-                        return computeHashFromInputStream(inputStream);
+                    try (InputStream inputStream = buffer.asInputStream()) {
+                        return DigestUtils.sha256Hex(inputStream);
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
                 });
     }
 
-    private String computeHashFromInputStream(InputStream inputStream) throws Exception {
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        byte[] buffer = new byte[8192];
-        int bytesRead;
-        while ((bytesRead = inputStream.read(buffer)) != -1) {
-            digest.update(buffer, 0, bytesRead);
-        }
-        byte[] hashBytes = digest.digest();
-        return bytesToHex(hashBytes);
-    }
-
-    private Mono<Boolean> checkHashExists(String hash) {
+    private Mono<Boolean> checkHashExists(final String hash) {
         return whisperJobRepository.findByHash(hash).hasElement();
     }
 
-    private Mono<Void> saveFile(MultipartFile file, String filename) {
-        Path mediaPath = Paths.get(mediaBasePath);
-        Path targetPath = mediaPath.resolve(filename);
-        return Mono.fromCallable(() -> {
-            Files.createDirectories(mediaPath);
-            Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
-            return null;
-        });
-    }
-
-    private Mono<Void> saveFile(FilePart filePart, String filename) {
-        Path mediaPath = Paths.get(mediaBasePath);
-        Path targetPath = mediaPath.resolve(filename);
+    private Mono<Void> saveFile(final FilePart filePart, final String filename) {
+        final Path mediaPath = Paths.get(mediaBasePath);
+        final Path targetPath = mediaPath.resolve(filename);
         return Mono.fromCallable(() -> {
             Files.createDirectories(mediaPath);
             return null;
         }).then(filePart.transferTo(targetPath));
     }
 
-    private Mono<WhisperJob> createJob(String hash, String filename) {
-        WhisperJob job = new WhisperJob(null, hash, new PendingStatus(), null, filename);
+    private Mono<WhisperJob> createJob(final String hash, final String filename) {
+        final WhisperJob job = new WhisperJob(null, hash, new PendingStatus(), null, filename);
         return whisperJobRepository.save(job);
     }
 
-    private void startJob(WhisperJob job, WhisperRequest request) {
+    private void startJob(final WhisperJob job, final WhisperRequest request) {
         processJobAsync(job, request).subscribe();
     }
 
-    private Mono<HashAndExists> computeHashAndCheckExists(Path filePath) {
+    private Mono<HashAndExists> computeHashAndCheckExists(final Path filePath) {
         return computeFileHash(filePath)
                 .flatMap(hash -> checkHashExists(hash)
                         .map(exists -> new HashAndExists(hash, exists)));
     }
 
-    private Mono<HashAndExists> computeHashAndCheckExists(MultipartFile file) {
-        return computeFileHash(file)
-                .flatMap(hash -> checkHashExists(hash)
-                        .map(exists -> new HashAndExists(hash, exists)));
-    }
-
-    private Mono<HashAndExists> computeHashAndCheckExists(FilePart filePart) {
+    private Mono<HashAndExists> computeHashAndCheckExists(final FilePart filePart) {
         return computeFileHash(filePart)
                 .flatMap(hash -> checkHashExists(hash)
                         .map(exists -> new HashAndExists(hash, exists)));
     }
 
-    private Mono<ResponseEntity<WhisperResponse>> createAndStartJob(String hash, String filename, WhisperRequest request) {
+    private Mono<ResponseEntity<WhisperResponse>> createAndStartJob(final String hash, final String filename, final WhisperRequest request) {
         return createJob(hash, filename)
                 .doOnSuccess(job -> startJob(job, request))
                 .map(job -> ResponseEntity.ok(
@@ -382,29 +325,29 @@ public class WhisperController {
     }
 
 
-    private Mono<Void> processJobAsync(WhisperJob job, WhisperRequest request) {
+    private Mono<Void> processJobAsync(final WhisperJob job, final WhisperRequest request) {
         return kickOffWhisperJob(request, job.getId())
                 .then(Mono.fromCallable(() -> {
                     // WhisperX creates multiple output files in a jobId-specific directory
                     // We want to read the .srt file which has the original filename with .srt extension
-                    Path outputDir = Paths.get(transcriptOutputBasePath).resolve(job.getId().toString());
-                    String originalFilename = request.getFileName();
+                    final Path outputDir = Paths.get(transcriptOutputBasePath).resolve(job.getId().toString());
+                    final String originalFilename = request.getFileName();
                     // Remove extension from original filename and add .srt
-                    String srtFilename = originalFilename.contains(".")
+                    final String srtFilename = originalFilename.contains(".")
                         ? originalFilename.substring(0, originalFilename.lastIndexOf('.')) + ".srt"
                         : originalFilename + ".srt";
-                    Path srtFilePath = outputDir.resolve(srtFilename);
+                    final Path srtFilePath = outputDir.resolve(srtFilename);
 
                     // Read the .srt file content
-                    String transcript = Files.readString(srtFilePath);
+                    final String transcript = Files.readString(srtFilePath);
                     job.setStatus(new CompletedStatus(transcript));
                     job.setTranscriptText(transcript);
                     return job;
                 }))
                 .flatMap(whisperJobRepository::save)
                 .then(Mono.fromCallable(() -> {
-                    Path source = Paths.get(mediaBasePath).resolve(request.getFileName());
-                    Path dest = Paths.get(videoOutputBasePath).resolve(request.getFileName());
+                    final Path source = Paths.get(mediaBasePath).resolve(request.getFileName());
+                    final Path dest = Paths.get(videoOutputBasePath).resolve(request.getFileName());
                     Files.createDirectories(dest.getParent());
                     Files.move(source, dest);
                     return (Void) null;
@@ -418,56 +361,56 @@ public class WhisperController {
 
     private Mono<Void> kickOffWhisperJob(final WhisperRequest request, final UUID jobId) {
         return Mono.fromCallable(() -> {
-            List<String> command = buildWhisperCommand(request, jobId);
+            final ImmutableList<String> command = buildWhisperCommand(request, jobId);
             log.info("command to run: {}", command);
             return command;
         }).flatMap(processService::executeCommand);
     }
 
-    private List<String> buildWhisperCommand(WhisperRequest request, UUID jobId) {
-        List<String> command = new ArrayList<>();
-        command.add("whisperx");
+    private ImmutableList<String> buildWhisperCommand(WhisperRequest request, UUID jobId) {
+        final ImmutableList.Builder<String> builder = ImmutableList.builder();
+        builder.add("whisperx");
 
         // Input audio file path
-        command.add(Paths.get(mediaBasePath).resolve(request.getFileName()).normalize().toString());
+        builder.add(Paths.get(mediaBasePath).resolve(request.getFileName()).normalize().toString());
 
         // Output directory - create a video-id specific subdirectory
-        Path outputDir = Paths.get(transcriptOutputBasePath).resolve(jobId.toString());
-        command.add("--output_dir");
-        command.add(outputDir.toString());
+        final Path outputDir = Paths.get(transcriptOutputBasePath).resolve(jobId.toString());
+        builder.add("--output_dir");
+        builder.add(outputDir.toString());
 
         // Model selection - use user specified or default
-        String model = (request.getModel() != null && !request.getModel().isEmpty()) ? request.getModel() : defaultModel;
-        command.add("--model");
-        command.add(model);
+        final String model = (request.getModel() != null && !request.getModel().isEmpty()) ? request.getModel() : defaultModel;
+        builder.add("--model");
+        builder.add(model);
 
         // Device configuration
-        command.add("--device");
-        command.add(device);
+        builder.add("--device");
+        builder.add(device);
         if ("cuda".equals(device)) {
-            command.add("--device_index");
-            command.add(deviceIndex.toString());
+            builder.add("--device_index");
+            builder.add(deviceIndex.toString());
         }
 
         // Batch size : This depends heavily on deployment env resources and is not something the user should change from the api layer.
-        Integer batchSize = this.batchSize;
-        command.add("--batch_size");
-        command.add(batchSize.toString());
+        final Integer batchSize = this.batchSize;
+        builder.add("--batch_size");
+        builder.add(batchSize.toString());
 
         // Compute type - use user specified or default
-        String computeType = (request.getComputeType() != null && !request.getComputeType().isEmpty()) ? request.getComputeType() : this.computeType;
-        command.add("--compute_type");
-        command.add(computeType);
+        final String computeType = (request.getComputeType() != null && !request.getComputeType().isEmpty()) ? request.getComputeType() : this.computeType;
+        builder.add("--compute_type");
+        builder.add(computeType);
 
         // Task - transcribe or translate
-        String task = (request.getTask() != null && !request.getTask().isEmpty()) ? request.getTask() : "transcribe";
-        command.add("--task");
-        command.add(task);
+        final String task = (request.getTask() != null && !request.getTask().isEmpty()) ? request.getTask() : "transcribe";
+        builder.add("--task");
+        builder.add(task);
 
         // Language - if specified
         if (request.getLanguage() != null && !request.getLanguage().isEmpty()) {
-            command.add("--language");
-            command.add(request.getLanguage());
+            builder.add("--language");
+            builder.add(request.getLanguage());
         }
 
         // Output format - use user specified or default (we want .srt)
@@ -478,82 +421,82 @@ public class WhisperController {
          *
          * For now no...
          */
-        String outputFormat = this.outputFormat;// (request.getOutputFormat() != null && !request.getOutputFormat().isEmpty()) ? request.getOutputFormat() : this.outputFormat;
-        command.add("--output_format");
-        command.add(outputFormat);
+        final String outputFormat = this.outputFormat;// (request.getOutputFormat() != null && !request.getOutputFormat().isEmpty()) ? request.getOutputFormat() : this.outputFormat;
+        builder.add("--output_format");
+        builder.add(outputFormat);
 
         // Alignment model - use user specified or default
-        String alignModel = (request.getAlignModel() != null && !request.getAlignModel().isEmpty()) ? request.getAlignModel() : defaultAlignModel;
+        final String alignModel = (request.getAlignModel() != null && !request.getAlignModel().isEmpty()) ? request.getAlignModel() : defaultAlignModel;
         if (alignModel != null && !alignModel.isEmpty()) {
-            command.add("--align_model");
-            command.add(alignModel);
+            builder.add("--align_model");
+            builder.add(alignModel);
         }
 
         // VAD method - use user specified or default
-        String vadMethod = (request.getVadMethod() != null && !request.getVadMethod().isEmpty()) ? request.getVadMethod() : defaultVadMethod;
-        command.add("--vad_method");
-        command.add(vadMethod);
+        final String vadMethod = (request.getVadMethod() != null && !request.getVadMethod().isEmpty()) ? request.getVadMethod() : defaultVadMethod;
+        builder.add("--vad_method");
+        builder.add(vadMethod);
 
         // VAD parameters - use user specified or defaults
         if (request.getVadOnset() != null) {
-            command.add("--vad_onset");
-            command.add(request.getVadOnset().toString());
+            builder.add("--vad_onset");
+            builder.add(request.getVadOnset().toString());
         }
         if (request.getVadOffset() != null) {
-            command.add("--vad_offset");
-            command.add(request.getVadOffset().toString());
+            builder.add("--vad_offset");
+            builder.add(request.getVadOffset().toString());
         }
         if (request.getChunkSize() != null) {
-            command.add("--chunk_size");
-            command.add(request.getChunkSize().toString());
+            builder.add("--chunk_size");
+            builder.add(request.getChunkSize().toString());
         }
 
         // Diarization options
-        Boolean diarize = request.getDiarize() != null ? request.getDiarize() : false;
+        final Boolean diarize = request.getDiarize() != null ? request.getDiarize() : false;
         if (diarize) {
-            command.add("--diarize");
+            builder.add("--diarize");
             // Speaker count options
             if (request.getNumSpeakers() != null) {
-                command.add("--min_speakers");
-                command.add(request.getNumSpeakers().toString());
-                command.add("--max_speakers");
-                command.add(request.getNumSpeakers().toString());
+                builder.add("--min_speakers");
+                builder.add(request.getNumSpeakers().toString());
+                builder.add("--max_speakers");
+                builder.add(request.getNumSpeakers().toString());
             } else {
                 if (request.getMinSpeakers() != null) {
-                    command.add("--min_speakers");
-                    command.add(request.getMinSpeakers().toString());
+                    builder.add("--min_speakers");
+                    builder.add(request.getMinSpeakers().toString());
                 }
                 if (request.getMaxSpeakers() != null) {
-                    command.add("--max_speakers");
-                    command.add(request.getMaxSpeakers().toString());
+                    builder.add("--max_speakers");
+                    builder.add(request.getMaxSpeakers().toString());
                 }
             }
             // Diarization model - use user specified or default
-            String diarizeModel = (request.getDiarizeModel() != null && !request.getDiarizeModel().isEmpty()) ? request.getDiarizeModel() : "pyannote/speaker-diarization-community-1";
-            command.add("--diarize_model");
-            command.add(diarizeModel);
+            final String diarizeModel = (request.getDiarizeModel() != null && !request.getDiarizeModel().isEmpty()) ? request.getDiarizeModel() : "pyannote/speaker-diarization-community-1";
+            builder.add("--diarize_model");
+            builder.add(diarizeModel);
         }
 
         // Sampling parameters
         if (request.getTemperature() != null) {
-            command.add("--temperature");
-            command.add(request.getTemperature().toString());
+            builder.add("--temperature");
+            builder.add(request.getTemperature().toString());
         }
         if (request.getBeamSize() != null) {
-            command.add("--beam_size");
-            command.add(request.getBeamSize().toString());
+            builder.add("--beam_size");
+            builder.add(request.getBeamSize().toString());
         }
 
         // Highlight words in output
         if (request.getHighlightWords() != null && request.getHighlightWords()) {
-            command.add("--highlight_words");
-            command.add("True");
+            builder.add("--highlight_words");
+            builder.add("True");
         }
 
         // Hotwords for better recognition
         if (request.getHotwords() != null && !request.getHotwords().isEmpty()) {
-            command.add("--hotwords");
-            command.add(request.getHotwords());
+            builder.add("--hotwords");
+            builder.add(request.getHotwords());
         }
 
         // HuggingFace token for gated models
@@ -568,19 +511,19 @@ public class WhisperController {
 
         // Progress printing
         if (printProgress != null && printProgress) {
-            command.add("--print_progress");
-            command.add("True");
+            builder.add("--print_progress");
+            builder.add("True");
         }
 
         // Legacy timestamp parameter (for backward compatibility if still used)
         if (request.getTimestamp() != null && !request.getTimestamp().isEmpty()) {
             // whisperX uses different timestamp handling, but we'll keep this for compatibility
             // Note: whisperX has different segment resolution options
-            command.add("--segment_resolution");
-            command.add(request.getTimestamp()); // "sentence" or "chunk"
+            builder.add("--segment_resolution");
+            builder.add(request.getTimestamp()); // "sentence" or "chunk"
         }
 
-        return command;
+        return builder.build();
     }
 
     // Record classes for flattening reactive chains
