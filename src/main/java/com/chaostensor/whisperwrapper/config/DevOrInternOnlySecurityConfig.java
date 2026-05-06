@@ -18,7 +18,7 @@ import org.springframework.security.web.server.SecurityWebFilterChain;
  * not an issue for now but we'll probably want to add some server to server auth solution when we push this into eks.
  */
 @Configuration
-@Profile("internal-only")
+@Profile({"internal-only", "test"})
 @Slf4j
 public class DevOrInternOnlySecurityConfig {
 

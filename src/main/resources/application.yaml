@@ -68,3 +68,20 @@ app:
     #            // IF we do we need to ensure it doesn't get stored, or if it's stored it's like GDPR deletable and
     #            // Encrypted..etc  um for now.
     # hf-token: ${WHISPERX_HF_TOKEN:}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: test
+app:
+  whisperx:
+    default-model: "tiny"
+    batch-size: 16
+    compute-type: "int8"
+    default-align-model: ""
+    default-vad-method: "pyannote_vad"
+    default-output-format: "srt"
+    device: "cpu"
+    device-index: 0
+    print-progress: false
