@@ -65,6 +65,8 @@ app:
     device-index: ${WHISPERX_DEVICE_INDEX:0}
     # Whether to print progress during transcription
     print-progress: ${WHISPERX_PRINT_PROGRESS:false}
+    # Factor to multiply media duration (in same time unit) to get process timeout. E.g. 5 means 5x realtime.
+    timeout-factor: ${WHISPERX_TIMEOUT_FACTOR:5}
     # HuggingFace token for accessing gated models (diarization)   // TODO Not sure we want to allow the user to pass this in.
     #            // IF we do we need to ensure it doesn't get stored, or if it's stored it's like GDPR deletable and
     #            // Encrypted..etc  um for now.

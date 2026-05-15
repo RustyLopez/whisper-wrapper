@@ -25,7 +25,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.UUID;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import reactor.util.function.Tuple2;
+import reactor.util.function.Tuples;
 
 import org.apache.commons.codec.digest.DigestUtils;
 import com.google.common.collect.ImmutableList;
@@ -118,6 +123,9 @@ public class WhisperController {
      */
     @Value("${app.whisperx.print-progress}")
     Boolean printProgress;
+
+    @Value("${app.whisperx.timeout-factor}")
+    Double timeoutFactor;
 
     /**
      * HuggingFace token for accessing gated models (diarization).
@@ -362,9 +370,28 @@ public class WhisperController {
     private Mono<Void> kickOffWhisperJob(final WhisperRequest request, final UUID jobId) {
         return Mono.fromCallable(() -> {
             final ImmutableList<String> command = buildWhisperCommand(request, jobId);
-            log.info("command to run: {}", command);
-            return command;
-        }).flatMap(processService::executeCommand);
+            final Path mediaPath = Paths.get(mediaBasePath).resolve(request.getFileName());
+            final long durationSecs = getMediaDurationSeconds(mediaPath);
+            final long timeout = (long) Math.ceil(durationSecs * timeoutFactor);
+            log.info("command to run: {}, timeoutSecs={}", command, timeout);
+            return Tuples.of(command, timeout);
+        }).flatMap(t -> processService.executeCommand(t.getT1(), t.getT2(), TimeUnit.SECONDS));
+    }
+
+    private long getMediaDurationSeconds(Path mediaPath) {
+        try {
+            Process p = Runtime.getRuntime().exec(new String[]{
+                "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1", mediaPath.toString()
+            });
+            BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            String line = reader.readLine();
+            p.waitFor(10, TimeUnit.SECONDS);
+            return (long) Math.ceil(Double.parseDouble(line.trim()));
+        } catch (Exception e) {
+            log.warn("Could not determine media duration, using fallback 3600s", e);
+            return 3600;
+        }
     }
 
     private ImmutableList<String> buildWhisperCommand(WhisperRequest request, UUID jobId) {

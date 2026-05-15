@@ -171,7 +171,7 @@ class WhisperControllerTest {
                 .build();
 
         // Mock process service
-        when(processService.executeCommand(anyList())).thenReturn(Mono.empty());
+        when(processService.executeCommand(anyList(), anyLong(), any())).thenReturn(Mono.empty());
 
         webTestClient.post()
                 .uri("/whispers")
