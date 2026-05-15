@@ -20,6 +20,7 @@ spring:
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.xml
     default-schema: whisper_wrapper
+    drop-first: true
   servlet:
     multipart:
       max-file-size: ${MAX_FILE_SIZE:1GB}
@@ -76,24 +77,6 @@ spring:
       on-profile: test
   liquibase:
     drop-first: true
-app:
-  whisperx:
-    default-model: "tiny"
-    batch-size: 16
-    compute-type: "int8"
-    default-align-model: ""
-    default-vad-method: "pyannote_vad"
-    default-output-format: "srt"
-    device: "cpu"
-    device-index: 0
-    print-progress: false
----
-spring:
-  config:
-    activate:
-      on-profile: internal-only
-  liquibase:
-
 ---
 spring:
   config:
