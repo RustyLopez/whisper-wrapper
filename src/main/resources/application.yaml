@@ -19,8 +19,10 @@ spring:
     password: ${SPRING_R2DBC_DATASOURCE_PASSWORD:password}
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.xml
-    default-schema: whisper_wrapper
-    drop-first: true
+    #default-schema: whisper_wrapper K requires more... effort because it has to run before Liquibase. fix later
+    default-schema: public
+    #drop-first: true
+    drop-first: false
   servlet:
     multipart:
       max-file-size: ${MAX_FILE_SIZE:1GB}
