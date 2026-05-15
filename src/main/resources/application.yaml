@@ -19,7 +19,7 @@ spring:
     password: ${SPRING_R2DBC_DATASOURCE_PASSWORD:password}
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.xml
-    default-schema: public
+    default-schema: whisper_wrapper
   servlet:
     multipart:
       max-file-size: ${MAX_FILE_SIZE:1GB}
@@ -74,6 +74,8 @@ spring:
   config:
     activate:
       on-profile: test
+  liquibase:
+    drop-first: true
 app:
   whisperx:
     default-model: "tiny"
@@ -85,3 +87,17 @@ app:
     device: "cpu"
     device-index: 0
     print-progress: false
+---
+spring:
+  config:
+    activate:
+      on-profile: internal-only
+  liquibase:
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+  liquibase:
+    drop-first: false
