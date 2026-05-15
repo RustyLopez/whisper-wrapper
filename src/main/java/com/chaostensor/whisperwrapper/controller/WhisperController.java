@@ -341,6 +341,7 @@ public class WhisperController {
                     final Path outputDir = Paths.get(transcriptOutputBasePath).resolve(job.getId().toString());
                     final String originalFilename = request.getFileName();
                     // Remove extension from original filename and add .srt
+                    // TODO we are assuming srt.... fix that.
                     final String srtFilename = originalFilename.contains(".")
                         ? originalFilename.substring(0, originalFilename.lastIndexOf('.')) + ".srt"
                         : originalFilename + ".srt";
