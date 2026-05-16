@@ -24,6 +24,7 @@ services:
     build: .
     ports:
       - "8070:8080"
+      - "5075:5005"
     depends_on:
       postgres-w-vector:
         condition: service_healthy
