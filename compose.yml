@@ -46,6 +46,7 @@ services:
       - ./media-input:/media-input
       - ./transcript-output:/transcript-output
       - ./video-output:/video-output
+    entrypoint: ["java", "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005", "-jar", "target/whisper-wrapper-0.0.1-SNAPSHOT.jar"]
 
 #volumes:
 #  postgres_data:
