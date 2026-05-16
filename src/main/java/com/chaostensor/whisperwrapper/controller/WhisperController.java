@@ -225,7 +225,7 @@ public class WhisperController {
                             .highlightWords(uploadRequest.getHighlightWords())
                             .hotwords(uploadRequest.getHotwords())
                             .build();
-                    startJob(savedJob, request);
+                    kickOffWhisperJob(savedJob, request);
                     return Mono.just(ResponseEntity.ok(
                             WhisperResponse.builder()
                                     .jobId(savedJob.getId().toString()).build()
@@ -308,9 +308,7 @@ public class WhisperController {
         return whisperJobRepository.save(job);
     }
 
-    private void startJob(final WhisperJob job, final WhisperRequest request) {
-        processJobAsync(job, request).subscribe();
-    }
+
 
     private Mono<HashAndExists> computeHashAndCheckExists(final Path filePath) {
         return computeFileHash(filePath)
@@ -326,7 +324,7 @@ public class WhisperController {
 
     private Mono<ResponseEntity<WhisperResponse>> createAndStartJob(final String hash, final String filename, final WhisperRequest request) {
         return createJob(hash, filename)
-                .doOnSuccess(job -> startJob(job, request))
+                .doOnSuccess(job -> kickOffWhisperJob(job, request))
                 .map(job -> ResponseEntity.ok(
                         WhisperResponse.builder()
                                 .jobId(job.getId().toString()).build()
@@ -334,10 +332,7 @@ public class WhisperController {
     }
 
 
-    private Mono<Void> processJobAsync(final WhisperJob job, final WhisperRequest request) {
-        kickOffWhisperJob(job, request);
-        return Mono.empty();
-    }
+
 
     private void kickOffWhisperJob(final WhisperJob job, final WhisperRequest request) {
         Mono.fromCallable(() -> {
