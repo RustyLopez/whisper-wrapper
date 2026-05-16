@@ -19,6 +19,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.core.io.buffer.DataBuffer;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -334,49 +335,47 @@ public class WhisperController {
 
 
     private Mono<Void> processJobAsync(final WhisperJob job, final WhisperRequest request) {
-        return kickOffWhisperJob(request, job.getId())
-                .then(Mono.fromCallable(() -> {
-                    // WhisperX creates multiple output files in a jobId-specific directory
-                    // We want to read the .srt file which has the original filename with .srt extension
-                    final Path outputDir = Paths.get(transcriptOutputBasePath).resolve(job.getId().toString());
-                    final String originalFilename = request.getFileName();
-                    // Remove extension from original filename and add .srt
-                    // TODO we are assuming srt.... fix that.
-                    final String srtFilename = originalFilename.contains(".")
-                        ? originalFilename.substring(0, originalFilename.lastIndexOf('.')) + ".srt"
-                        : originalFilename + ".srt";
-                    final Path srtFilePath = outputDir.resolve(srtFilename);
-
-                    // Read the .srt file content
-                    final String transcript = Files.readString(srtFilePath);
-                    job.setStatus(new CompletedStatus(transcript));
-                    job.setTranscriptText(transcript);
-                    return job;
-                }))
-                .flatMap(whisperJobRepository::save)
-                .then(Mono.fromCallable(() -> {
-                    final Path source = Paths.get(mediaBasePath).resolve(request.getFileName());
-                    final Path dest = Paths.get(videoOutputBasePath).resolve(request.getFileName());
-                    Files.createDirectories(dest.getParent());
-                    Files.move(source, dest);
-                    return (Void) null;
-                }))
-                .doOnError(e -> {
-                    log.error("failed to generate transcript", e);
-                    job.setStatus(new FailedStatus());
-                    whisperJobRepository.save(job).subscribe(); // fire and forget
-                });
+        kickOffWhisperJob(job, request);
+        return Mono.empty();
     }
 
-    private Mono<Void> kickOffWhisperJob(final WhisperRequest request, final UUID jobId) {
-        return Mono.fromCallable(() -> {
-            final ImmutableList<String> command = buildWhisperCommand(request, jobId);
+    private void kickOffWhisperJob(final WhisperJob job, final WhisperRequest request) {
+        Mono.fromCallable(() -> {
+            final ImmutableList<String> command = buildWhisperCommand(request, job.getId());
             final Path mediaPath = Paths.get(mediaBasePath).resolve(request.getFileName());
             final long durationSecs = getMediaDurationSeconds(mediaPath);
             final long timeout = (long) Math.ceil(durationSecs * timeoutFactor);
             log.info("command to run: {}, timeoutSecs={}", command, timeout);
             return Tuples.of(command, timeout);
-        }).flatMap(t -> processService.executeCommand(t.getT1(), t.getT2(), TimeUnit.SECONDS));
+        }).flatMap(t -> processService.executeCommand(t.getT1(), t.getT2(), TimeUnit.SECONDS))
+          .then(Mono.fromCallable(() -> {
+              final Path outputDir = Paths.get(transcriptOutputBasePath).resolve(job.getId().toString());
+              final String originalFilename = request.getFileName();
+              final String srtFilename = originalFilename.contains(".")
+                  ? originalFilename.substring(0, originalFilename.lastIndexOf('.')) + ".srt"
+                  : originalFilename + ".srt";
+              final Path srtFilePath = outputDir.resolve(srtFilename);
+              final String transcript = Files.readString(srtFilePath);
+              job.setStatus(new CompletedStatus(transcript));
+              job.setTranscriptText(transcript);
+              return job;
+          }))
+          .flatMap(whisperJobRepository::save)
+          .then(Mono.fromCallable(() -> {
+              final Path source = Paths.get(mediaBasePath).resolve(request.getFileName());
+              final Path dest = Paths.get(videoOutputBasePath).resolve(request.getFileName());
+              Files.createDirectories(dest.getParent());
+              Files.move(source, dest);
+              return (Void) null;
+          }))
+          .subscribeOn(Schedulers.boundedElastic())
+          .subscribe(null, e -> {
+              log.error("failed to generate transcript", e);
+              if (!(job.getStatus() instanceof FailedStatus)) {
+                  job.setStatus(new FailedStatus());
+                  whisperJobRepository.save(job).subscribe();
+              }
+          });
     }
 
     private long getMediaDurationSeconds(Path mediaPath) {
