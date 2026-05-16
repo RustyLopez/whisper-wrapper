@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferUtils;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
@@ -33,7 +34,10 @@ import java.io.InputStreamReader;
 import reactor.util.function.Tuple2;
 import reactor.util.function.Tuples;
 
+import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.codec.digest.DigestUtils;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
 import com.google.common.collect.ImmutableList;
 
 /**
@@ -273,23 +277,31 @@ public class WhisperController {
     private Mono<String> computeFileHash(Path filePath) {
         return Mono.fromCallable(() -> {
             try (InputStream inputStream = Files.newInputStream(filePath)) {
-                log.warn("\n\n\n WARNING: SLOW \n\n\n This hashing process currently takes several minutes for a large file.");
-                return DigestUtils.sha256Hex(inputStream);
+                MessageDigest digest = MessageDigest.getInstance("SHA-256");
+                try (DigestInputStream dis = new DigestInputStream(inputStream, digest)) {
+                    byte[] buffer = new byte[8192];
+                    while (dis.read(buffer) != -1) {
+                    }
+                }
+                return Hex.encodeHexString(digest.digest());
             }
         });
     }
 
     private Mono<String> computeFileHash(FilePart filePart) {
-        return filePart.content()
-                // TODO: THIS IS incorrect. Despite all the pleas to grok.  /sigh, anyway, um adapt the flux to an input stream and process the hash in a streaming fashion, rather than reducing the entire stream of buffers into a single buffer in memory ...
-                .reduce(DataBuffer::write)
-                .map(buffer -> {
-                    try (InputStream inputStream = buffer.asInputStream()) {
-                        return DigestUtils.sha256Hex(inputStream);
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                });
+        return Mono.defer(() -> {
+            try {
+                MessageDigest digest = MessageDigest.getInstance("SHA-256");
+                return filePart.content()
+                        .doOnNext(buffer -> {
+                            digest.update(buffer.asByteBuffer());
+                            DataBufferUtils.release(buffer);
+                        })
+                        .then(Mono.just(Hex.encodeHexString(digest.digest())));
+            } catch (Exception e) {
+                return Mono.error(e);
+            }
+        });
     }
 
     private Mono<Boolean> checkHashExists(final String hash) {
