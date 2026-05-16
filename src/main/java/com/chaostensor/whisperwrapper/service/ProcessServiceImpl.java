@@ -21,7 +21,7 @@ import java.util.stream.Collectors;
 public class ProcessServiceImpl implements ProcessService {
 
     @Override
-    public Mono<Void> executeCommand(List<String> command) {
+    public Mono<Void> executeCommand(List<String> command, long timeout, TimeUnit unit) {
         return Mono.fromCallable(() -> {
             final Process process;
             try {
@@ -39,7 +39,7 @@ public class ProcessServiceImpl implements ProcessService {
 
             try {
                 // Wait for process to complete with timeout
-                process.onExit().get(4, TimeUnit.HOURS);
+                process.onExit().get(timeout, unit);
             } catch (TimeoutException te) {
                 try {
                     process.destroy();

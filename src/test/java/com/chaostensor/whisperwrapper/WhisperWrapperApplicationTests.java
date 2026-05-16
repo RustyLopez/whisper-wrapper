@@ -4,6 +4,7 @@ package com.chaostensor.whisperwrapper;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.r2dbc.core.DatabaseClient;
+import org.springframework.test.context.ActiveProfiles;
 import org.testcontainers.junit.jupiter.Container;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -15,7 +16,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 @Testcontainers
 @SpringBootTest
-@TestPropertySource(properties = { "spring.config.location=classpath:application-test.yaml" })
+@ActiveProfiles(profiles = "test")
 public class WhisperWrapperApplicationTests {
 
 	@Container

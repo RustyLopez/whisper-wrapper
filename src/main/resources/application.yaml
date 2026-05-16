@@ -19,16 +19,19 @@ spring:
     password: ${SPRING_R2DBC_DATASOURCE_PASSWORD:password}
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.xml
+    #default-schema: whisper_wrapper K requires more... effort because it has to run before Liquibase. fix later
     default-schema: public
+    #drop-first: true
+    drop-first: false
   servlet:
     multipart:
       max-file-size: ${MAX_FILE_SIZE:1GB}
       max-request-size: ${MAX_REQUEST_SIZE:1025MB}
 
-logging:
-  level:
-    org.springframework.web.reactive: DEBUG
-    reactor.netty: DEBUG
+#logging:
+#  level:
+#    org.springframework.web.reactive: DEBUG
+#    reactor.netty: DEBUG
 
 app:
   media-input: ${MEDIA_INPUT:./media-input} # TODO use an env var with a fallback to the process working dir / media
@@ -64,7 +67,24 @@ app:
     device-index: ${WHISPERX_DEVICE_INDEX:0}
     # Whether to print progress during transcription
     print-progress: ${WHISPERX_PRINT_PROGRESS:false}
+    # Factor to multiply media duration (in same time unit) to get process timeout. E.g. 5 means 5x realtime.
+    timeout-factor: ${WHISPERX_TIMEOUT_FACTOR:5}
     # HuggingFace token for accessing gated models (diarization)   // TODO Not sure we want to allow the user to pass this in.
     #            // IF we do we need to ensure it doesn't get stored, or if it's stored it's like GDPR deletable and
     #            // Encrypted..etc  um for now.
     # hf-token: ${WHISPERX_HF_TOKEN:}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: test
+  liquibase:
+    drop-first: true
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+  liquibase:
+    drop-first: false
