@@ -273,6 +273,7 @@ public class WhisperController {
     private Mono<String> computeFileHash(Path filePath) {
         return Mono.fromCallable(() -> {
             try (InputStream inputStream = Files.newInputStream(filePath)) {
+                log.warn("\n\n\n WARNING: SLOW \n\n\n This hashing process currently takes several minutes for a large file.");
                 return DigestUtils.sha256Hex(inputStream);
             }
         });
@@ -280,6 +281,7 @@ public class WhisperController {
 
     private Mono<String> computeFileHash(FilePart filePart) {
         return filePart.content()
+                // TODO: THIS IS incorrect. Despite all the pleas to grok.  /sigh, anyway, um adapt the flux to an input stream and process the hash in a streaming fashion, rather than reducing the entire stream of buffers into a single buffer in memory ...
                 .reduce(DataBuffer::write)
                 .map(buffer -> {
                     try (InputStream inputStream = buffer.asInputStream()) {
